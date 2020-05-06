@@ -1,89 +1,77 @@
 %{
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #define MAX_LINE_LENG 256
 #define LIST strcat(buf,yytext)
-#define token(t) {LIST; printf("<'%s'>\n",yytext);}
-#define tokenInteger(t,i) {LIST; printf("<%s:%d>\n","int",i);}
-#define tokenFloat(t,f) {LIST; printf("<%s:%f>\n","float",f);}
-#define tokenString(t,s) {LIST; printf("<%s:%s>\n","id",s);}
-int linenum = 0;
+#define token(t) {LIST; printf("<'%s'>\n",t);}
+#define tokenInteger(t,i) {LIST; printf("<%s:%d>\n",t,i);}
+#define tokenFloat(t,f) {LIST; printf("<%s:%f>\n",t,f);}
+#define tokenString(t,s) {LIST; printf("<%s:%s>\n",t,s);}
+int linenum = 1;
 char buf[MAX_LINE_LENG];
 %}
-number [0-9]+
+number [+|-]?[0-9]+
 identifier [a-zA-Z][a-zA-Z0-9]*
-real [0-9]+.[0-9]+
+real [+|-]?[0-9]+.[0-9]+
+delimiters [,|:|\.|;|\(|\)|\[|\]|\{|\}]
+arithmetic [\+|\-|\*|\/]
+relational \<|<=|>=|==|!=|\>
+logical &&|\|\||!
+keywords boolean|break|char|case|class|continue|def|do|else|exit|float|for|if|int|null|object|print|println|repeat|return|string|to|type|val|var|while
+boolean true|false
 
 %%
-
-","             {token(',');}
-":"             {token(':');}
-"."             {token('.');}
-";"             {token(';');}
-"("             {token('(');}
-")"             {token(')');}
-"["             {token('[');}
-"]"             {token(']');}
-"{"             {token('{');}
-"}"             {token('}');}
-
-"+"             {token('+');}
-"-"             {token('-');}
-"*"             {token('*');}
-"/"             {token('/');}
-
-"%"             {token('%');}
-
-"<"             {token('<');}
-"<="            {token('<=');}
-">="            {token('>=');}
-">"             {token('>');}
-"=="            {token('==');}
-"!="            {token('!=');}
-
-"&&"            {token('&&');}
-"||"            {token('||');}
-"!"             {token('!');}
-
-"boolean"       {token('boolean');}
-"break"         {token('break');}
-"char"          {token('char');}
-"case"          {token('case');}
-"class"         {token('class');}
-"continue"      {token('continue');}
-"def"           {token('def');}
-"do"            {token('do');}
-"else"          {token('else');}
-"exit"          {token('exit');}
-"false"         {token('false');}
-"float"         {token('float');}
-"for"           {token('for');}
-"if"            {token('if');}
-"int"           {token('int');}
-"null"          {token('null');}
-"object"        {token('object');}
-"print"         {token('print');}
-"println"       {token('println');}
-"repeat"        {token('repeat');}
-"return"        {token('return');}
-"string"        {token('string');}
-"to"            {token('to');}
-"true"          {token('TRUE');}
-"type"          {token('type');}
-"val"           {token('val');}
-"var"           {token('var');}
-"while"         {token('while');}
-
-{number}        {
-    tokenInteger(number, atoi(yytext));
+ /* Delimiters */
+{delimiters}    {token(yytext);}
+ /* arithmetic */
+{arithmetic}    {token(yytext);}
+ /* remainder */
+%               {token("%");}
+ /* relational */
+{relational}    {token(yytext);}
+ /* logical */
+{logical}       {token(yytext);}
+ /* keywords */
+{keywords}      {
+    char *temp = malloc(sizeof(char) * yyleng);
+    strcpy(temp, yytext);
+    for(int i=0; i<yyleng; i++) temp[i] = toupper(temp[i]);
+    token(temp);
 }
-
+ /* boolean constant */
+{boolean}       {
+    char *temp = malloc(sizeof(char) * yyleng);
+    strcpy(temp, yytext);
+    for(int i=0; i<yyleng; i++) temp[i] = toupper(temp[i]);
+    tokenString("BOOLEAN", temp);
+}
+ /* identifier */
 {identifier}    {
-    tokenString(identifier, yytext);
+    tokenString("identifier", yytext);
 }
-
+ /* integer */
+{number}        {
+    tokenInteger("integer", atoi(yytext));
+}
+ /* real number */
 {real}          {
-    tokenFloat(real, atof(yytext));
+    tokenFloat("float", atof(yytext));
+}
+ /* string constant */
+
+ /* comment */
+"//"            {
+    strcat(buf, "//");
+    char temp, x[1];
+    while((temp = input()) != '\n')
+    {
+        x[0] = temp;
+        strcat(buf, x);
+    }   
+    printf("%d:%s\n", linenum, buf);
+    linenum++;
+    buf[0] = '\0';
 }
 
 \n              {
@@ -94,23 +82,6 @@ real [0-9]+.[0-9]+
 }
 
 [ \t]* {LIST;}
-
-\"[.]*\"        {
-    LIST;
-
-}
-
-"//"            {
-    char x, set[1];
-    while((x = yyinput()) != '\n')
-    {
-        set[0] = x;
-        strcat(buf, set[0]);
-    }
-    printf("%d:%s\n", linenum, buf);
-    linenum++;
-    buf[0] = '\0';
-}
 
 .               {
     LIST;
