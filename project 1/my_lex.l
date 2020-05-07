@@ -56,10 +56,20 @@ boolean true|false
 }
  /* real number */
 {real}          {
-    tokenFloat("float", atof(yytext));
+    tokenFloat("REAL", atof(yytext));
 }
  /* string constant */
-
+\"[^"]*\"       {
+    char temp = input();
+    if(temp == '\"'){
+        yyless(yyleng - 1);
+        printf("less:%s\n", yytext);
+        yymore();
+    }
+    else{
+        tokenString("string", yytext);
+    }
+}
  /* comment */
 "//"            {
     strcat(buf, "//");

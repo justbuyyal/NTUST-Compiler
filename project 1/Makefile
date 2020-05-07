@@ -7,8 +7,12 @@ my_lex: my_lex.l
 lex: lex.yy.c
 	$(CC) a.out -O lex.yy.c -ll
 
-.PHONY: clean,run
+.PHONY: clean,run,test,yy
 clean:
 	rm a.out lex.yy.c
 run:
+	./a.out
+test:
 	cat testing.scala | ./a.out
+yy:
+	cat yy.scala | ./a.out
