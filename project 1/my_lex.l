@@ -11,10 +11,25 @@
 int linenum = 1;
 char buf[MAX_LINE_LENG];
 char str_buf[MAX_LINE_LENG];
-void create();
-int lookup(string s);
-int insert(string s);
-int dump();
+/* Symbol table */
+typedef struct {
+    int index;
+    char *id_name;
+    struct symbol *next;
+}symbol;
+
+typedef struct {
+    int size;
+    symbol *table;
+}Symbol_table;
+
+Symbol_table* create();
+int lookup(char *, Symbol_table*);
+int insert(char *, Symbol_table*);
+void dump(Symbol_table*);
+
+Symbol_table *new_table;
+
 %}
 number [+|-]?[0-9]+
 identifier [a-zA-Z][a-zA-Z0-9]*
@@ -62,6 +77,7 @@ boolean true|false
  /* identifier */
 {identifier}    {
     tokenString("identifier", yytext);
+    printf("index: %d\n", insert(yytext, new_table));
 }
  /* integer */
 {number}        {
@@ -69,7 +85,7 @@ boolean true|false
 }
  /* real number */
 {real}          {
-    tokenFloat("REAL", atof(yytext));
+    tokenFloat("real", atof(yytext));
 }
  /* string constant */
 \"                          {BEGIN(STRING); LIST;}
@@ -113,8 +129,72 @@ boolean true|false
     exit(-1);
 }
 %%
+Symbol_table *create()
+{
+    Symbol_table *new_symbol_table = malloc(sizeof(Symbol_table) * 1);
+    new_symbol_table->size = 0;
+    new_symbol_table->table = NULL;
+    return new_symbol_table;
+}
+int lookup(char *s, Symbol_table *t)
+{
+    if(t->table == NULL)
+    {
+        return 0;
+    }
+    symbol *temp = t->table;
+    while(temp != NULL)
+    {
+        if(strcmp(temp->id_name, s) == 0)
+        {
+            return temp->index;
+        }
+        temp = temp->next;
+    }
+    return 0;
+}
+int insert(char *s, Symbol_table *t)
+{
+    symbol *temp;
+    if(t->table == NULL)
+    {
+        temp->id_name = s;
+        temp->index = 1;
+        temp->next = NULL;
+        t->table = temp;
+        t->size = 1;
+        return 1;
+    }
+    temp = t->table;
+    while(temp != NULL)
+    {
+        if(temp->next == NULL)
+        {
+            symbol *buf;
+            buf->id_name = s;
+            buf->index = (temp->index + 1);
+            buf->next = NULL;
+            temp->next = buf;
+            ++t->size;
+            return buf->index;
+        }
+        temp = temp->next;
+    }
+}
+void dump(Symbol_table *t)
+{
+    printf("Symbol Table:\n");
+    symbol *temp = t->table;
+    while(temp != NULL)
+    {
+        printf("%d: %s\n", temp->index, temp->id_name);
+        temp = temp->next;
+    }
+}
 int main()
 {
-    while(yylex());
+    new_table = create();
+    while(yylex() && yywrap());
+    dump(new_table);
     return 0;
 }
