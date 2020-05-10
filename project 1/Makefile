@@ -13,6 +13,6 @@ clean:
 run:
 	./a.out
 test:
-	cat testing.scala | ./a.out
+	./a.out testing.scala
 yy:
-	cat yy.scala | ./a.out
+	./a.out yy.scala

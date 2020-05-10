@@ -1,5 +1,6 @@
 %{
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 #define MAX_LINE_LENG 256
@@ -77,7 +78,10 @@ boolean true|false
  /* identifier */
 {identifier}    {
     tokenString("identifier", yytext);
-    printf("index: %d\n", insert(yytext, new_table));
+     /* copy identifier into symbol table */
+    char *temp = malloc(sizeof(char)* yyleng);
+    strcpy(temp, yytext);
+    insert(temp, new_table);
 }
  /* integer */
 {number}        {
@@ -111,7 +115,7 @@ boolean true|false
 <COMMENT>"*/"               {BEGIN(INITIAL); LIST;}
 <COMMENT>"\n"               {LIST; printf("%d: %s", linenum, buf); buf[0] = '\0'; linenum++;}
 <COMMENT>.                  {LIST;}
-<<EOF>>                     {BEGIN(INITIAL); printf("%d: %s\n", linenum, buf); buf[0] = '\0'; exit(0);}
+<<EOF>>                     {BEGIN(INITIAL); printf("%d: %s\n", linenum, buf); buf[0] = '\0'; return;}
  /* newline */
 \n              {
     LIST;
@@ -158,6 +162,7 @@ int insert(char *s, Symbol_table *t)
     symbol *temp;
     if(t->table == NULL)
     {
+        temp = malloc(sizeof(symbol) * 1);
         temp->id_name = s;
         temp->index = 1;
         temp->next = NULL;
@@ -170,7 +175,7 @@ int insert(char *s, Symbol_table *t)
     {
         if(temp->next == NULL)
         {
-            symbol *buf;
+            symbol *buf = malloc(sizeof(symbol) * 1);
             buf->id_name = s;
             buf->index = (temp->index + 1);
             buf->next = NULL;
@@ -191,10 +196,17 @@ void dump(Symbol_table *t)
         temp = temp->next;
     }
 }
-int main()
+int main(int argc, char *argv[])
 {
+    /* using yyin to read input file by lex */
+    if(argc != 2) return -1;
+    yyin = fopen(argv[1], "r");
+    /* create symbol_table */
     new_table = create();
-    while(yylex() && yywrap());
+    /* read input file */
+    yylex();
+    fclose(yyin);
     dump(new_table);
+    free(new_table);
     return 0;
 }
