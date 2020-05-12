@@ -7,7 +7,8 @@
 #define LIST strcat(buf,yytext)
 #define token(t) {LIST; printf("<'%s'>\n",t);}
 #define tokenInteger(t,i) {LIST; printf("<%s:%d>\n",t,i);}
-#define tokenFloat(t,f) {LIST; printf("<%s:%f>\n",t,f);}
+#define tokenExp(t,e) {LIST; printf("<%s:%s>\n",t,e);}
+#define tokenFloat(t,f) {LIST; printf("<%s:%lf>\n",t,f);}
 #define tokenString(t,s) {LIST; printf("<%s:%s>\n",t,s);}
 int linenum = 1;
 char buf[MAX_LINE_LENG];
@@ -32,9 +33,10 @@ void dump(Symbol_table*);
 Symbol_table *new_table;
 
 %}
-number [+|-]?[0-9]+
+number [+-]?[0-9]+
 identifier [a-zA-Z][a-zA-Z0-9]*
-real [+|-]?[0-9]+.[0-9]+
+real [+-]?[0-9]+.[0-9]+
+expreal {number}"."{number}[Ee][+-]?{number}
 delimiters [,|:|\.|;|\(|\)|\[|\]|\{|\}|=]
 arithmetic [\+|\-|\*|\/]
 relational \<|<=|>=|==|!=|\>
@@ -87,6 +89,10 @@ boolean true|false
  /* integer */
 {number}        {
     tokenInteger("integer", atoi(yytext));
+}
+ /* exponential */
+{expreal}       {
+    tokenExp("exponential", yytext);
 }
  /* real number */
 {real}          {
