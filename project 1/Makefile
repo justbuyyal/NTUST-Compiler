@@ -5,14 +5,12 @@ LEX = my_lex.l
 my_lex: my_lex.l
 	flex $(LEX)
 lex: lex.yy.c
-	$(CC) a.out -O lex.yy.c -ll
+	$(CC) parser -O lex.yy.c -ll
 
-.PHONY: clean,run,test,yy
+.PHONY: clean,run,test
 clean:
-	rm a.out lex.yy.c
+	rm parser lex.yy.c
 run:
-	./a.out
+	./parser
 test:
-	./a.out testing.scala
-yy:
-	./a.out yy.scala
+	./parser HelloWorld.scala

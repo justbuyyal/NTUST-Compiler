@@ -35,7 +35,7 @@ Symbol_table *new_table;
 number [+|-]?[0-9]+
 identifier [a-zA-Z][a-zA-Z0-9]*
 real [+|-]?[0-9]+.[0-9]+
-delimiters [,|:|\.|;|\(|\)|\[|\]|\{|\}]
+delimiters [,|:|\.|;|\(|\)|\[|\]|\{|\}|=]
 arithmetic [\+|\-|\*|\/]
 relational \<|<=|>=|==|!=|\>
 logical &&|\|\||!
@@ -81,7 +81,8 @@ boolean true|false
      /* copy identifier into symbol table */
     char *temp = malloc(sizeof(char)* yyleng);
     strcpy(temp, yytext);
-    insert(temp, new_table);
+    if(lookup(temp, new_table) == 0)
+        insert(temp, new_table);
 }
  /* integer */
 {number}        {
@@ -94,8 +95,9 @@ boolean true|false
  /* string constant */
 \"                          {BEGIN(STRING); LIST;}
 <STRING>\"\"                {LIST; strcat(str_buf, "\"");}
+<STRING>\n                  {LIST; printf("%d:%s\n", linenum, buf); printf("bad character:'\"'\n"); exit(-1);}
 <STRING>[ \t]*              {LIST; strcat(str_buf, yytext);}
-<STRING>[^\"]*              {LIST; strcat(str_buf, yytext);}
+<STRING>[^\"\n]*            {LIST; strcat(str_buf, yytext);}
 <STRING>\"                  {BEGIN(INITIAL); tokenString("string", str_buf); str_buf[0] = '\0';}
  /* comment */
 "//"            {
