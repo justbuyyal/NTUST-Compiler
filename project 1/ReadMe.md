@@ -19,7 +19,7 @@ lex: lex.yy.c
 clean:
 	rm parser lex.yy.c
 run:
-	./parser
+	./parser example.scala
 test:
 	./parser HelloWorld.scala
 ```
@@ -27,6 +27,7 @@ test:
 ```
 make // build
 ./parser {FileName} // execute scanner
+make run // execute scanner with testing code = example.scala
 make test // execute scanner with testing code = HellowWorld.scala
 ```
 ### Remove
