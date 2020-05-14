@@ -143,6 +143,7 @@ boolean true|false
 %%
 Symbol_table *create()
 {
+    /* initialize a symbol table */
     Symbol_table *new_symbol_table = malloc(sizeof(Symbol_table) * 1);
     new_symbol_table->size = 0;
     new_symbol_table->table = NULL;
@@ -170,6 +171,7 @@ int insert(char *s, Symbol_table *t)
     symbol *temp;
     if(t->table == NULL)
     {
+        /* initialize a symbol node */
         temp = malloc(sizeof(symbol) * 1);
         temp->id_name = s;
         temp->index = 1;

@@ -11,6 +11,6 @@ lex: lex.yy.c
 clean:
 	rm parser lex.yy.c
 run:
-	./parser
+	./parser example.scala
 test:
 	./parser HelloWorld.scala
