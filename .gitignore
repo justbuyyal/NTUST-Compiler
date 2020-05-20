@@ -3,10 +3,17 @@ gnore Visual Studio temporary files, build results, and
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
+## Scala file
+*.scala
+
+## execution file
+*.exe
+
 ## My folder
 *.zip
 *.cgi
 *.html
+*.c
 
 # Doucument File
 *.pdf
