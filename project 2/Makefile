@@ -1,4 +1,4 @@
-all: scanner lex.yy.o symbols.o parser
+all: scanner lex.yy.o symbols.o
 
 CC = gcc
 
@@ -14,6 +14,6 @@ symbols.o: symbols.c symbols.h
 
 .PHONY: clean
 clean:
-	rm -f *.o lex.yy.c
+	rm -f *.o lex.yy.c y.tab.h
 
 .PHONY: run
