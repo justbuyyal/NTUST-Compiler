@@ -15,6 +15,15 @@ enum valueType
     NONE
 };
 
+// type of identifier
+enum idType
+{
+    CONST,
+    VARIABLE,
+    ARRAY,
+    FUNCTION,
+    OBJECT
+};
 
 class Symbol
 {

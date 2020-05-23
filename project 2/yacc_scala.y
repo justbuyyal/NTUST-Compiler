@@ -34,23 +34,167 @@ void yyerror(string msg);
 %left '*' '/' '%'
 %nonassoc UMINUS
 %%
-program:        identifier semi
-                {
-                Trace("Reducing to program\n");
-                }
-                ;
+const_and_var_dec:
+    const_dec const_and_var_dec
+    | var_dec const_and_var_dec
+    | ;
+const_dec:
+    VAL ID '=' expression
+    {
+    }|
+    VAL ID ':' data_type '=' expression
+    {
+    };
+var_dec:
+    VAR ID
+    {
+    }|
+    VAR ID ':' data_type
+    {
+    }|
+    VAR ID '=' expression
+    {
+    }|
+    VAR ID ':' data_type '=' expression
+    {
+    }|
+    VAR ID ':' data_type '[' INT ']'
+    {
+        /* array type */
+    };
+data_type:
+    BOOLEAN
+    {
+        $$ = BOOL;
+    }|
+    INT
+    {
+        $$ = INT;
+    }|
+    CHAR
+    {
+        $$ = CHAR;
+    }|
+    FLOAT
+    {
+        $$ = FLOAT;
+    }|
+    STRING
+    {
+        $$ = STRING;
+    };
+arg:
+;
+methods:
+    method_dec methods
+    | method_dec;
+method_dec:
+    DEF ID '(' arg ')'
+    {
+    } '{' const_and_var_dec stmts '}'
+    {
+    };
+program:
+    OBJECT ID '{' const_and_var_dec methods '}'
+    {
+    }
+;
+stmts:
+    /* empty stmts */
+    | stmt stmts;
+stmt:
+    simple_stmt
+    | block
+    | conditional
+    | loop;
+simple_stmt:
+    ID '=' expression
+    {
 
-semi:           SEMICOLON
-                {
-                Trace("Reducing to semi\n");
-                }
-                ;
+    }|
+    ID '[' expression ']' '=' expression
+    {
+
+    }
+    | PRINT '(' expression ')'
+    | PRINTLN '(' expression ')'
+    |
+    READ ID
+    {
+
+    }
+    | RETURN expression
+    | RETURN;
+expression:
+    ID
+    {}|
+    '-' expression %prec UMINUS
+    {}|
+    expression '*' expression
+    {}|
+    expression '/' expression
+    {}|
+    expression '+' expression
+    {}|
+    expression '-' expression
+    {}|
+    expression '<' expression
+    {}|
+    expression LE expression
+    {}|
+    expression DE expression
+    {}|
+    expression BE expression
+    {}|
+    expression '>' expression
+    {}|
+    expression NE expression
+    {}|
+    '!' expression
+    {}|
+    expression AND_OP expression
+    {}|
+    expression OR_OP expression
+    {}|
+    ID '[' expression ']'
+    {}|
+    fun_invocation
+    {
+    }|
+    data_type
+    {
+    };
+fun_invocation:
+    ID '(' comma_separated_exp ')'
+    {
+    };
+comma_separated_exp:
+;
+block:
+    '{' const_and_var_dec stmts'}';
+block_or_stmt:
+    block | stmts;
+conditional:
+    IF '(' expression ')' block_or_stmt ELSE block_or_stmt
+    {
+
+    }|
+    IF '(' expression ')' block_or_stmt
+    {
+
+    };
+loop:
+    WHILE '(' expression ')' block_or_stmt
+    {}|
+    FOR '(' ID '<' '-' INT TO INT ')' block_or_stmt
+    {};
 %%
 
 void yyerror(string msg)
 {
     cout << msg << endl;
 }
+
 int main(int argc, char* argv[])
 {
     /* open the source program file */
