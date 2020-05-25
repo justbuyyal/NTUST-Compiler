@@ -74,14 +74,14 @@ false           {
  /* integer */
 {NUMBER}        {
     yylval.ival = atoi(yytext);
-    return INT;
+    return INT_VAL;
 }
  /* real number */
 {REAL}          {
     double temp;
     sscanf(yytext, "%lf", temp);
     yylval.fval = temp;
-    return FLOAT;
+    return FLOAT_VAL;
 }
  /* string constant */
 \"                          {BEGIN(STRING); LIST;}

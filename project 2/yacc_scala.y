@@ -3,7 +3,7 @@
 #include "lex.yy.c"
 #define Trace(t)    printf(t)
 
-SymbolTable tables = SymbolTable();
+Symbol_list symboltables;
 void yyerror(string msg);
 %}
 
@@ -13,18 +13,22 @@ void yyerror(string msg);
     bool bval;
     char cval;
     string* strval;
+    variable varType;
+    Value value;
 }
 /* tokens */
 // keywords
 %token SEMICOLON BOOLEAN BREAK CHAR CASE CLASS CONTINUE DEF DO ELSE EXIT FALSE FLOAT FOR IF INT NULL OBJECT PRINT PRINTLN REPEAT RETURN STRING TO TRUE TYPE VAL VAR WHILE
-%token DE LE BE NE OR_OP AND_OP
 // token assign
 %token <bval> BOOL_VAL
-%token <ival> INT
-%token <cval> CHAR
-%token <fval> FLOAT
+%token <ival> INT_VAL
+%token <cval> CHAR_VAL
+%token <fval> FLOAT_VAL
 %token <strval> STR_VAL
 %token <strval> ID
+// declare nonterminal
+%type <varType> data_type
+%type <value> expression const_value
 /* operator precedence */
 %left OR_OP
 %left AND_OP
@@ -34,34 +38,41 @@ void yyerror(string msg);
 %left '*' '/' '%'
 %nonassoc UMINUS
 %%
+const_value:
+    INT_VAL
+    {
+        Value *i = new Value(INT);
+        i->as_int($1);
+        $$ = i;
+    }|
+    FLOAT_VAL
+    {
+        Value *i = new Value(FLOAT);
+        i->as_float($1);
+        $$ = i;
+    }|
+    BOOL_VAL
+    {
+        Value *i = new Value(BOOL);
+        i->as_bool($1);
+        $$ = i;
+    }|
+    CHAR_VAL
+    {
+        Value *i = new Value(CHAR);
+        i->as_char($1);
+        $$ = i;
+    }|
+    STR_VAL
+    {
+        Value *i = new Value(STRING);
+        i->as_str($1);
+        $$ = i;
+    };
 const_and_var_dec:
     const_dec const_and_var_dec
     | var_dec const_and_var_dec
-    | ;
-const_dec:
-    VAL ID '=' expression
-    {
-    }|
-    VAL ID ':' data_type '=' expression
-    {
-    };
-var_dec:
-    VAR ID
-    {
-    }|
-    VAR ID ':' data_type
-    {
-    }|
-    VAR ID '=' expression
-    {
-    }|
-    VAR ID ':' data_type '=' expression
-    {
-    }|
-    VAR ID ':' data_type '[' INT ']'
-    {
-        /* array type */
-    };
+    |; /* empty */
 data_type:
     BOOLEAN
     {
@@ -83,13 +94,49 @@ data_type:
     {
         $$ = STRING;
     };
+optional_type:
+    ':' data_type
+    {
+        $$ = $2;
+    }|
+    {
+        $$ = NONE;
+    };
+const_dec:
+    VAL ID optional_type '=' expression
+    {
+        
+    };
+var_dec:
+    VAR ID optional_type
+    {
+    }|
+    VAR ID '=' expression
+    {
+    }|
+    VAR ID ':' data_type '=' expression
+    {
+    }|
+    VAR ID ':' data_type '[' INT_VAL ']'
+    {
+        /* array type */
+    };
 arg:
-;
+    ID ':' data_type
+    {
+    };
+args:
+    arg
+    {}|
+    args ',' arg
+    {}|
+    /* empty */
+    {};
 methods:
     method_dec methods
     | method_dec;
 method_dec:
-    DEF ID '(' arg ')'
+    DEF ID '(' args ')' optional_type
     {
     } '{' const_and_var_dec stmts '}'
     {
@@ -169,26 +216,35 @@ fun_invocation:
     {
     };
 comma_separated_exp:
-;
+    expression
+    {}|
+    comma_separated_exp ',' expression
+    {}| /* empty */
+    {};
 block:
     '{' const_and_var_dec stmts'}';
-block_or_stmt:
-    block | stmts;
+block_or_simp_stmt:
+    block | simple_stmt;
 conditional:
-    IF '(' expression ')' block_or_stmt ELSE block_or_stmt
+    IF '(' expression ')' block_or_simp_stmt ELSE block_or_simp_stmt    
     {
 
     }|
-    IF '(' expression ')' block_or_stmt
+    IF '(' expression ')' block_or_simp_stmt
     {
 
     };
 loop:
-    WHILE '(' expression ')' block_or_stmt
+    WHILE '(' expression ')' block_or_simp_stmt
     {}|
-    FOR '(' ID '<' '-' INT TO INT ')' block_or_stmt
+    FOR '(' ID '<' '-' INT_VAL TO INT_VAL ')' block_or_simp_stmt
     {};
 %%
+
+void DiffDataType()
+{
+    yyerror("Different Data Type !");
+}
 
 void yyerror(string msg)
 {
