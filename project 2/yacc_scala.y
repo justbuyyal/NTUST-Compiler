@@ -4,7 +4,22 @@
 #define Trace(t)    printf(t)
 
 Symbol_list symboltables;
-void yyerror(string msg);
+void yyerror(string msg)
+{
+    cout << msg << endl;
+}
+void DiffDataType()
+{
+    yyerror("Different Data Type !");
+}
+void SymbolAdd(Symbol* s)
+{
+    if(Symbol_list.insert(s) == -1)
+    {
+        string warning = "ID name : " + s->get_name() + "had already inserted";
+        yyerror(warning);
+    }
+}
 %}
 
 %union {
@@ -13,8 +28,7 @@ void yyerror(string msg);
     bool bval;
     char cval;
     string* strval;
-    variable varType;
-    Value value;
+    variable type;
 }
 /* tokens */
 // keywords
@@ -27,8 +41,7 @@ void yyerror(string msg);
 %token <strval> STR_VAL
 %token <strval> ID
 // declare nonterminal
-%type <varType> data_type
-%type <value> expression const_value
+%type <type> data_type return_type
 /* operator precedence */
 %left OR_OP
 %left AND_OP
@@ -38,218 +51,126 @@ void yyerror(string msg);
 %left '*' '/' '%'
 %nonassoc UMINUS
 %%
-const_value:
-    INT_VAL
-    {
-        Value *i = new Value(INT);
-        i->as_int($1);
-        $$ = i;
-    }|
-    FLOAT_VAL
-    {
-        Value *i = new Value(FLOAT);
-        i->as_float($1);
-        $$ = i;
-    }|
-    BOOL_VAL
-    {
-        Value *i = new Value(BOOL);
-        i->as_bool($1);
-        $$ = i;
-    }|
-    CHAR_VAL
-    {
-        Value *i = new Value(CHAR);
-        i->as_char($1);
-        $$ = i;
-    }|
-    STR_VAL
-    {
-        Value *i = new Value(STRING);
-        i->as_str($1);
-        $$ = i;
-    };
-const_and_var_dec:
-    const_dec const_and_var_dec
-    | var_dec const_and_var_dec
-    |; /* empty */
-data_type:
-    BOOLEAN
-    {
-        $$ = BOOL;
-    }|
-    INT
-    {
-        $$ = INT;
-    }|
-    CHAR
-    {
-        $$ = CHAR;
-    }|
-    FLOAT
-    {
-        $$ = FLOAT;
-    }|
-    STRING
-    {
-        $$ = STRING;
-    };
+const_var_dec:
+    const_dec const_var_dec
+    | var_dec const_var_dec
+    | /* zero */;
 optional_type:
     ':' data_type
-    {
-        $$ = $2;
-    }|
-    {
-        $$ = NONE;
-    };
+    |;
 const_dec:
     VAL ID optional_type '=' expression
     {
-        
     };
 var_dec:
     VAR ID optional_type
     {
+
     }|
-    VAR ID '=' expression
+    VAR ID optional_type '=' expression
     {
-    }|
-    VAR ID ':' data_type '=' expression
-    {
+
     }|
     VAR ID ':' data_type '[' INT_VAL ']'
     {
-        /* array type */
+        // array declaration
     };
 arg:
-    ID ':' data_type
-    {
-    };
+    ID ':' data_type;
 args:
     arg
-    {}|
-    args ',' arg
-    {}|
-    /* empty */
-    {};
-methods:
-    method_dec methods
-    | method_dec;
-method_dec:
-    DEF ID '(' args ')' optional_type
-    {
-    } '{' const_and_var_dec stmts '}'
-    {
-    };
-program:
-    OBJECT ID '{' const_and_var_dec methods '}'
-    {
-    }
-;
-stmts:
-    /* empty stmts */
-    | stmt stmts;
-stmt:
-    simple_stmt
-    | block
-    | conditional
-    | loop;
-simple_stmt:
+    | args ',' arg;
+optional_args:
+    args | /* zero */;
+return_type:
+    ':' data_type
+    | /* zero */;
+simple:
     ID '=' expression
-    {
-
-    }|
-    ID '[' expression ']' '=' expression
-    {
-
-    }
+    |ID '[' expression ']' '=' expression
     | PRINT '(' expression ')'
     | PRINTLN '(' expression ')'
-    |
-    READ ID
-    {
-
-    }
-    | RETURN expression
-    | RETURN;
+    | READ ID
+    | RETURN
+    | RETURN expression;
 expression:
-    ID
-    {}|
-    '-' expression %prec UMINUS
-    {}|
-    expression '*' expression
-    {}|
-    expression '/' expression
-    {}|
-    expression '+' expression
-    {}|
-    expression '-' expression
-    {}|
-    expression '<' expression
-    {}|
-    expression LE expression
-    {}|
-    expression DE expression
-    {}|
-    expression BE expression
-    {}|
-    expression '>' expression
-    {}|
-    expression NE expression
-    {}|
-    '!' expression
-    {}|
-    expression AND_OP expression
-    {}|
-    expression OR_OP expression
-    {}|
-    ID '[' expression ']'
-    {}|
-    fun_invocation
+    const_dec
+    | ID
+    | func_invocation
+    | ID '[' expression ']'
+    | '-' expression %prec UMINUS
+    | expression '*' expression
+    | expression '/' expression
+    | expression '+' expression
+    | expression '-' expression
+    | expression '<' expression
+    | expression '>' expression
+    | expression LE expression
     {
-    }|
-    data_type
+        // <=
+    }
+    | expression BE expression
     {
-    };
-fun_invocation:
-    ID '(' comma_separated_exp ')'
+        // >=
+    }
+    | expression DE expression
     {
+        // ==
+    }
+    | expression NE expression
+    {
+        // !=
+    }
+    | '!' expression
+    | expression AND_OP expression
+    {
+        // &&
+    }
+    | expression OR_OP expression
+    {
+        // ||
     };
 comma_separated_exp:
     expression
-    {}|
-    comma_separated_exp ',' expression
-    {}| /* empty */
-    {};
+    | comma_separated_exp ',' expression
+    | /* zero */;
+func_invocation:
+    ID '(' comma_separated_exp ')';
 block:
-    '{' const_and_var_dec stmts'}';
-block_or_simp_stmt:
-    block | simple_stmt;
+    '{' const_var_dec stmts '}';
+block_or_simple:
+    block
+    | simple;
 conditional:
-    IF '(' expression ')' block_or_simp_stmt ELSE block_or_simp_stmt    
-    {
-
-    }|
-    IF '(' expression ')' block_or_simp_stmt
-    {
-
-    };
+    IF '(' expression ')' block_or_simple ELSE block_or_simple
+    | IF '(' expression ')' block_or_simple;
 loop:
-    WHILE '(' expression ')' block_or_simp_stmt
-    {}|
-    FOR '(' ID '<' '-' INT_VAL TO INT_VAL ')' block_or_simp_stmt
+    WHILE '(' expression ')' block_or_simple
+    | FOR '(' ID '<' '-' INT_VAL TO INT_VAL ')' block_or_simple;
+stmt:
+    simple
+    | expression
+    | func_invocation
+    | block
+    | conditional
+    | loop;
+stmts:
+    stmt 
+    | stmts stmt
+    | /* zero */;
+method:
+    DEF ID '(' optional_args ')' return_type
+    {
+
+    }'{' const_var_dec '}'
+    {};
+program:
+    OBJECT ID
+    {
+
+    }'{' const_var_dec '}'
     {};
 %%
-
-void DiffDataType()
-{
-    yyerror("Different Data Type !");
-}
-
-void yyerror(string msg)
-{
-    cout << msg << endl;
-}
 
 int main(int argc, char* argv[])
 {

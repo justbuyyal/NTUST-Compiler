@@ -28,136 +28,89 @@ enum syntactic
     _ERR
 };
 
-class Value
+class sValue
 {
-    public:
-        variable type;
-        bool flag = false;
-        union
-        {
-            int ival;
-            float fval;
-            bool bval;
-            char cval;
-            string* strval;
-        };
-        Value():type(NONE){};
-        Value(variable v):type(v){}
-        variable get_type(){return type;}
-        void as_int(int i){ival = i;}
-        void as_float(float f){fval = f; flag = true;}
-        void as_bool(bool b){bval = b; flag = true;}
-        void as_char(char c){cval = c; flag = true;}
-        void as_str(string* s){strval = s; flag = true;}
+private:
+    variable type;
+    bool flag;
+    union 
+    {
+        int ival;
+        float fval;
+        bool bval;
+        char cval;
+        string* strval;
+    };
+public:
+    sValue():flag(false), type(ERR){}
+    sValue(variable t):flag(false), type(t){}
+    variable get_type(){return type;}
+    void assign_int(int i){ival = i; flag = true;}
+    void assign_float(float f){fval = f; flag = true;}
+    void assign_bool(bool b){bval = b; flag = true;}
+    void assign_char(char c){cval = c; flag = true;}
+    void assign_str(string* s){strval = s; flag = true;}
 };
-
-string get_varType(variable v)
-{
-    string output;
-    switch (v)
-    {
-        case INT: output = "INTEGER"; break;
-        case FLOAT: output = "FLOAT"; break;
-        case BOOL: output = "BOOL"; break;
-        case CHAR: output = "CHAR"; break;
-        case STRING: output = "STRING"; break;
-        case ERR: output = "ERROR"; break;
-        default: output = "VAR_ERROR"; break;
-    }
-    return output;
-}
-
-string get_synType(syntactic s)
-{
-    string output;
-    switch (s)
-    {
-        case CONST: output = "CONST"; break;
-        case VARIABLE: output = "VARIABLE"; break;
-        case ARRAY: output = "ARRAY"; break;
-        case FUNCTION: output = "FUNCTION"; break;
-        case OBJECT: output = "OBJECT"; break;
-        case _ERR: output = "SYN_ERROR"; break;
-    }
-    return output;
-}
 
 class Symbol
 {
-    private:
-        string name;
-        syntactic syn;
-    public:
-        string get_name(){return name;}
-        syntactic get_syn()(return syn;)
-        Symbol(string s, syntactic n):name(s),syn(n){}
+private:
+    string id_name;
+    syntactic syn_dec;
+public:
+    Symbol(string id, syntactic syn):id_name(id), syn_dec(syn){}
+    string get_name(){return id_name;}
+    syntactic get_syn(){return syn_dec;}
+    
+    virtual bool verified(){return false;}
+    virtual variable get_type(){return NONE;}
+    virtual void set_data(sValue v){}
+    virtual sValue get_data(){return sValue();}
 };
 
-class VarSymbol: public Symbol
+class VarSymbol:public Symbol
 {
-    private:
-        Value var_value;
-    public:
-        VarSymbol(string id, variable type, syntactic syn):Symbol(id, syn), var_value(Value(type)){}
-        VarSymbol(string id, Value v, syntactic syn):Symbol(id, syn), var_value(v){}
-        variable get_type(){return var_value->get_type();}
-        Value get_value(){return var_value;}
+private:
+    sValue variable_value;
+public:
+    VarSymbol(string id, sValue v, syntactic syn):Symbol(id, syn), variable_value(v){}
+    VarSymbol(string id, variable t, syntactic syn):Symbol(id, syn){variable_value = new sValue(type);}
+    virtual bool verified(){return variable_value->flag;}
+    virtual variable get_type(){return variable_value->get_type();}
+    virtual void set_data(sValue v){variable_value = v;}
+    virtual sValue get_data(){return variable_value;}
 };
 
-class FuncSymbol: public Symbol
+class ArrSymbol:public Symbol
 {
-    private:
-        Value fun_value;
-    public:
+
 };
 
-class ArraySymbol: public Symbol
+class FuncSymbol:public Symbol
 {
-    private:
-        Value arr_value;
-    public:
+
 };
 
 class SymbolTable
 {
-    private:
-        map<string, Symbol*> table;
-    public:
-        SymbolTable() {
-
+private:
+    map<string, Symbol*>table;
+public:
+    Symbol* lookup(string name){
+        if(tale.find(name) != table.end()) return table[name];
+        else return NULL;
+    }
+    int insert(Symbol* s){
+        if(lookup(s->get_name()) == NULL){
+            table.insert(pair<string, Symbol*>(s->get_name(), s));
+            return 1;
         }
-        Symbol* lookup(string s){
-            if(table.find(s) != table.end()) return table[s];
-            else return NULL;
+        else return -1;
+    }
+    void dump(){
+        for(auto iter = table)
+        {
+            cout << "Name: " << iter->get_name() << " ,Type: " << iter->get_type() << endl;
         }
-        int insert(Symbol* s){
-            if(table.find(s->name) != table.end()){ // found
-                return -1;
-            }
-            else{ // not found
-                table.insert(pair<string, Symbol*>(s->name, s));
-                return 1;
-            }
-        }
-        void dump(){
-            for(auto iter = table)
-            {
-                cout << iter.second << endl;
-            }
-        }
-};
-
-class Symbol_list
-{
-    private:
-        vector<SymbolTable>list;
-        int size;
-    public:
-        Symbol_list(){size = 0; list.push_back(SymbolTable());}
-        void push_table(){
-            list.push_back();
-        }
-        void pop_table(){
-            if(!list.empty()) list.pop_back();
-        }
+    }
 };

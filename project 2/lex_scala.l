@@ -24,7 +24,6 @@ DELIMITERS [,|:|\.|;|\(|\)|\[|\]|\{|\}|=]
 ARITHMETIC [\+|\-|\*|\/%]
 RELATIONAL [\>|\<]
 LOGICAL !
-KEYWORDS boolean|break|char|case|class|continue|def|do|else|exit|float|for|if|int|null|object|print|println|repeat|return|string|to|type|val|var|while
 
  // Create a state for comment
 %x COMMENT
@@ -47,14 +46,32 @@ KEYWORDS boolean|break|char|case|class|continue|def|do|else|exit|float|for|if|in
  /* logical */
 {LOGICAL}       {tokenOP(*yytext);} // Single operator
  /* keywords */
-{KEYWORDS}      {
-     /* create a dynamic char array to save keywords string */
-    char *temp = malloc(sizeof(char) * yyleng);
-    strcpy(temp, yytext);
-     /* make every words to upper */
-    for(int i=0; i<yyleng; i++) temp[i] = toupper(temp[i]);
-    token(temp);
-}
+boolean         {token(BOOLEAN);}
+break           {token(BREAK);}
+char            {token(CHAR);}
+case            {token(CASE);}
+class           {token(CLASS);}
+continue        {token(CONTIUNE);}
+def             {token(DEF);}
+do              {token(DO);}
+else            {token(ELSE);}
+exit            {token(EXIT);}
+float           {token(FLOAT);}
+for             {token(FOR);}
+if              {token(IF);}
+int             {token(INT);}
+null            {token(NULL);}
+object          {token(OBJECT);}
+print           {token(PRINT);}
+println         {token(PRINTLN);}
+repeat          {token(REPEAT);}
+return          {token(RETURN);}
+string          {token(STRING);}
+to              {token(TO);}
+type            {token(TYPE);}
+val             {token(VAL);}
+var             {token(VAR);}
+while           {token(WHILE);}
  /* boolean value */
 true            {
     LIST;
