@@ -16,6 +16,7 @@ char buf[MAX_LINE_LENG];
 char str_buf[MAX_LINE_LENG];
 
 %}
+%option c++
 DIGIT [0-9]
 NUMBER {DIGIT}+
 IDENTIFIER [a-zA-Z][a-zA-Z0-9]*
