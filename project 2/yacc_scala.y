@@ -1,9 +1,9 @@
 %{
 #include "SymbolTable.h"
-#include "lex.yy.c"
+#include "lex.yy.cc"
 #define Trace(t)    printf(t)
 
-Symbol_list tables = new Symbol_list();
+Symbol_list tables;
 void yyerror(string msg)
 {
     cout << msg << endl;
@@ -18,17 +18,18 @@ void Symbol_Not_Found()
 }
 void Assign_Error(string id_name)
 {
-    yyerror(id_name + "\'s syntactic is not corresponded, can not assign !");
+    string temp = id_name + "\'s syntactic is not corresponded, can not assign !";
+    yyerror(temp);
 }
 void Array_Error(int option)
 {
-    string temp;
+    string temp = "Array Error ! ";
     switch(option)
     {
-        case 0: temp = "Array index is not integer"; break;
-        case 1: temp = "Array size can not less than one"; break;
+        case 0: temp += "Array index is not integer"; break;
+        case 1: temp += "Array size can not less than one"; break;
     }
-    yyerror("Array Error !" + temp);
+    yyerror(temp);
 }
 void Wrong_Data_Type()
 {
@@ -36,10 +37,9 @@ void Wrong_Data_Type()
 }
 void addSymbol(Symbol* s)
 {
-    if(tables->insert(s) == -1) yyerror("Symbol already exist !");
+    if(tables.insert(s) == -1) yyerror("Symbol already exist !");
 }
 %}
-
 %union {
     int ival;
     float fval;
@@ -48,11 +48,12 @@ void addSymbol(Symbol* s)
     string* strval;
     variable type;
     sValue* symbol_value;
-    vector<sValue>* data_list;
+    vector<sValue>* exp_list;
+    vector<variable>* args_data;
 }
 /* tokens */
 // keywords
-%token SEMICOLON BOOLEAN BREAK CHAR CASE CLASS CONTINUE DEF DO ELSE EXIT FALSE FLOAT FOR IF INT NULL OBJECT PRINT PRINTLN REPEAT RETURN STRING TO TRUE TYPE VAL VAR WHILE
+%token SEMICOLON BOOLEAN BREAK CHAR CASE CLASS CONTINUE DEF DO ELSE EXIT FALSE FLOAT FOR IF INT NULL OBJECT PRINT PRINTLN REPEAT RETURN STRING TO TRUE TYPE VAL VAR WHILE READ
 // token assign
 %token <bval> BOOL_VAL
 %token <ival> INT_VAL
@@ -60,10 +61,6 @@ void addSymbol(Symbol* s)
 %token <fval> FLOAT_VAL
 %token <strval> STR_VAL
 %token <strval> ID
-// declare nonterminal
-%type <type> data_type return_type
-%type <symbol_value> expression const_val
-%type <data_list> comma_separated_exp
 /* operator precedence */
 %left OR_OP
 %left AND_OP
@@ -72,6 +69,11 @@ void addSymbol(Symbol* s)
 %left '+' '-'
 %left '*' '/' '%'
 %nonassoc UMINUS
+// declare nonterminal
+%type <type> data_type optional_type arg return_type func_invocation
+%type <symbol_value> const_val expression
+%type <exp_list> comma_separated_exp comma_separated_exps
+%type <args_data> args optional_args
 %%
 const_var_dec:
     const_dec const_var_dec
@@ -133,8 +135,7 @@ optional_type:
     ':' data_type
     {
         $$ = $2;
-    }
-    |
+    }|
     {
         $$ = NONE;
     };
@@ -142,46 +143,45 @@ const_dec:
     VAL ID optional_type '=' expression
     {
         if($3 != NONE){
-            if($3 != expression->get_type()){
+            if($3 != $5->get_type()){
                 DiffDataType();
             }
         }
-        VarSymbol temp = new VarSymbol($2, $5, CONST);
+        VarSymbol* temp = new VarSymbol($2, *$5, CONST);
         addSymbol(temp);
     };
 var_dec:
     VAR ID optional_type
     {
-        VarSymbol temp = new VarSymbol($2, $3, VARIABLE);
+        VarSymbol* temp = new VarSymbol($2, $3, VARIABLE);
         addSymbol(temp);
     }|
     VAR ID optional_type '=' expression
     {
         if($3 != NONE){
-            if($3 != expression->get_type()){
+            if($3 != $5->get_type()){
                 DiffDataType();
             }
         }
-        VarSymbol temp = new VarSymbol($2, $5, VARIABLE);
+        VarSymbol* temp = new VarSymbol($2, *$5, VARIABLE);
         addSymbol(temp);
     }|
     VAR ID ':' data_type '[' INT_VAL ']'
     {
         // array declaration
         if($6 < 1) Array_Error(1);
-        ArrSymbol temp = new ArrSymbol($2, $4, ARRAY, $6);
+        ArrSymbol* temp = new ArrSymbol($2, $4, ARRAY, $6);
         addSymbol(temp);
     };
 arg:
     ID ':' data_type
     {
-        VarSymbol temp = new VarSymbol($1, $3, VARIABLE);
-        $$ = temp;
+        $$ = $3;
     };
 args:
     arg
     {
-        vector<VarSymbol>* temp = new vector<VarSymbol>();
+        vector<variable>* temp = new vector<variable>();
         temp->push_back($1);
         $$ = temp;
     }
@@ -196,7 +196,8 @@ optional_args:
         $$ = $1;
     }| /* zero */
     {
-        $$ = NULL;
+        vector<variable>* temp = new vector<variable>();
+        $$ = temp;
     };
 return_type:
     ':' data_type
@@ -212,20 +213,23 @@ simple:
     {
         Symbol* temp = tables.lookup($1);
         if(temp == NULL) Symbol_Not_Found(); // no declaration before
-        if(temp->get_type() != expression->get_type()) DiffDataType();
+        if(temp->get_type() != $3->get_type()) DiffDataType();
         if(temp->get_syn() != VARIABLE) Assign_Error(temp->get_name()); // Variable
-        temp->set_data($3);
+        // set data
+        temp->set_data(*$3); // variable
     }|
     ID '[' expression ']' '=' expression
     {
         Symbol* temp = tables.lookup($1);
         if(temp == NULL) Symbol_Not_Found(); // no declaration before
-        if(temp->get_type() != expression->get_type()) DiffDataType();
+        if(temp->get_type() != $6->get_type()) DiffDataType();
         if(temp->get_syn() != ARRAY) Assign_Error(temp->get_name()); // Array
         // array index error
         if($3->get_type() != iNT) Array_Error(0);
+        // array index error(unset)
+        if(!$3->flag) yyerror("Unchecked value !");
         // assign a new value
-        temp->new_data($6, $3->ival);
+        temp->new_data(*$6, $3->ival);
     }|
     PRINT '(' expression ')'
     | PRINTLN '(' expression ')'
@@ -241,12 +245,12 @@ comma_separated_exp:
     expression
     {
         vector<sValue>* temp = new vector<sValue>();
-        temp->push_back($1);
+        temp->push_back(*$1);
         $$ = temp;
     }
     | comma_separated_exp ',' expression
     {
-        $1->push_back($3);
+        $1->push_back(*$3);
         $$ = $1;
     };
 comma_separated_exps:
@@ -256,7 +260,8 @@ comma_separated_exps:
     }
     | /* zero */
     {
-        $$ = new vector<sValue>();
+        vector<sValue>* temp = new vector<sValue>();
+        $$ = temp;
     };
 func_invocation:
     ID '(' comma_separated_exps ')'
@@ -264,7 +269,7 @@ func_invocation:
         Symbol* f_temp  = tables.lookup($1);
         if(f_temp == NULL) Symbol_Not_Found(); // no declaration before
         if(f_temp->get_syn() != FUNCTION) Assign_Error(f_temp->get_name()); // Function
-        if(!f_temp->verified($3)) yyerror("Function input data correspondence error !");
+        if(!f_temp->verified($3)) yyerror("func_invocation: Function input data correspondence error !");
         $$ = f_temp->get_type(); // return function return type
     };
 expression:
@@ -276,18 +281,20 @@ expression:
     {
         Symbol* temp = tables.lookup($1);
         if(temp == NULL) Symbol_Not_Found(); // no declaration before
+        if(temp->get_syn() != VARIABLE) Assign_Error(temp->get_name()); // Variable
         $$ = temp->get_data(); // return data
     }
     | func_invocation
     {
-        sValue temp = sValue($1);
+        // function call
+        sValue* temp = new sValue($1);
         $$ = temp;
     }
     | ID '[' expression ']'
     {
         if($3->get_type() != iNT) Array_Error(0); // array index error
         Symbol* temp = tables.lookup($1);
-        if(temp == NULL) Symbol_Not_Found() // no declaration before
+        if(temp == NULL) Symbol_Not_Found(); // no declaration before
         if(temp->get_syn() != ARRAY) Assign_Error(temp->get_name()); // Array
         // return array value[ival]
         $$ = temp->get_data($3->ival);
@@ -380,7 +387,7 @@ expression:
         if($1->get_type() != $3->get_type()) DiffDataType();
         variable temp = $1->get_type();
         if(temp != bOOL) Wrong_Data_Type(); // only boolean can compare
-        $1->bval = $1->bval < $3->bval;
+        $1->bval = ($1->bval < $3->bval);
         $$ = $1;
     }
     | expression '>' expression
@@ -388,7 +395,7 @@ expression:
         if($1->get_type() != $3->get_type()) DiffDataType();
         variable temp = $1->get_type();
         if(temp != bOOL) Wrong_Data_Type(); // only boolean can compare
-        $1->bval = $1->bval > $3->bval;
+        $1->bval = ($1->bval > $3->bval);
         $$ = $1;
     }
     | expression LE expression
@@ -397,7 +404,7 @@ expression:
         if($1->get_type() != $3->get_type()) DiffDataType();
         variable temp = $1->get_type();
         if(temp != bOOL) Wrong_Data_Type(); // only boolean can compare
-        $1->bval = $1->bval <= $3->bval;
+        $1->bval = ($1->bval <= $3->bval);
         $$ = $1;
     }
     | expression BE expression
@@ -406,7 +413,7 @@ expression:
         if($1->get_type() != $3->get_type()) DiffDataType();
         variable temp = $1->get_type();
         if(temp != bOOL) Wrong_Data_Type(); // only boolean can compare
-        $1->bval = $1->bval >= $3->bval;
+        $1->bval = ($1->bval >= $3->bval);
         $$ = $1;
     }
     | expression DE expression
@@ -415,7 +422,7 @@ expression:
         if($1->get_type() != $3->get_type()) DiffDataType();
         variable temp = $1->get_type();
         if(temp != bOOL) Wrong_Data_Type(); // only boolean can compare
-        $1->bval = $1->bval == $3->bval;
+        $1->bval = ($1->bval == $3->bval);
         $$ = $1;
     }
     | expression NE expression
@@ -424,15 +431,15 @@ expression:
         if($1->get_type() != $3->get_type()) DiffDataType();
         variable temp = $1->get_type();
         if(temp != bOOL) Wrong_Data_Type(); // only boolean can compare
-        $1->bval = $1->bval != $3->bval;
+        $1->bval = ($1->bval != $3->bval);
         $$ = $1;
     }
     | '!' expression
     {
         // only boolean can compare
         if($2->get_type() != bOOL) Wrong_Data_Type();
-        $1->bval = !($1->bval);
-        $$ = $1;
+        $2->bval = !($2->bval);
+        $$ = $2;
     }
     | expression AND_OP expression
     {
@@ -440,7 +447,7 @@ expression:
         if($1->get_type() != $3->get_type()) DiffDataType();
         variable temp = $1->get_type();
         if(temp != bOOL) Wrong_Data_Type(); // only boolean can compare
-        $1->bval = $1->bval && $3->bval;
+        $1->bval = ($1->bval && $3->bval);
         $$ = $1;
     }
     | expression OR_OP expression
@@ -449,16 +456,18 @@ expression:
         if($1->get_type() != $3->get_type()) DiffDataType();
         variable temp = $1->get_type();
         if(temp != bOOL) Wrong_Data_Type(); // only boolean can compare
-        $1->bval = $1->bval || $3->bval;
+        $1->bval = ($1->bval || $3->bval);
         $$ = $1;
     };
 block:
     '{'
     {
-        tables.AddTable();
-    } const_var_dec stmts '}'
+        tables.AddTable();  // create a new table for current scope
+    }
+    const_var_dec stmts '}'
     {
         // show the Symbols of top table
+        tables.DumpTable();
         tables.PopTable();
     };
 block_or_simple:
@@ -469,18 +478,21 @@ conditional:
     {
         // only boolean can compare
         if($3->get_type() != bOOL) Wrong_Data_Type();
-    } block_or_simple ELSE block_or_simple
+    } 
+    block_or_simple ELSE block_or_simple
     | IF '(' expression ')' 
     {
         // only boolean can compare
         if($3->get_type() != bOOL) Wrong_Data_Type();
-    } block_or_simple;
+    }
+    block_or_simple;
 loop:
     WHILE '(' expression ')'
     {
         // only boolean can compare
         if($3->get_type() != bOOL) Wrong_Data_Type();
-    } block_or_simple
+    } 
+    block_or_simple
     | FOR '(' ID '<' '-' INT_VAL TO INT_VAL ')'
     {
         Symbol* temp = tables.lookup($3);
@@ -489,7 +501,8 @@ loop:
         if(temp->get_type() != iNT) Assign_Error(temp->get_name()); // integer
         // left should be smaller than right
         if($6 > $8) Assign_Error(temp->get_name());
-    } block_or_simple;
+    }
+    block_or_simple;
 stmt:
     simple
     | expression
@@ -506,24 +519,37 @@ method:
     {
         FuncSymbol* temp = new FuncSymbol($2, $6, FUNCTION);
         // input data assign to function symbol
-        if($4 != NULL){
+        if($4->size() > 0){
             for(int i = 0; i < $4->size(); i++){
-                temp->load_data(*($4 + i));
+                // load args data type
+                temp->load_data($4[i]);
             }
         }
         addSymbol(temp); // add function symbol to table
-        AddTable(); // create a new table for next scope
-    }'{' const_var_dec stmts '}'
+        tables.AddTable(); // create a new table for current scope
+    }
+    '{' const_var_dec stmts '}'
     {
         // show the Symbols of top table
+        tables.DumpTable();
         tables.PopTable();
     };
+methods:
+    method
+    | methods method;
 program:
     OBJECT ID
     {
-        
-    }'{' const_var_dec '}'
-    {};
+        Symbol* temp = new Symbol($2, OBJECT);
+        addSymbol(temp); // add object symbol to table
+        tables.AddTable(); // create a new table for current scope
+    }
+    '{' const_var_dec methods '}'
+    {
+        // show the Symbols of top table
+        tables.DumpTable();
+        tables.PopTable();
+    };
 %%
 
 int main(int argc, char* argv[])
@@ -533,7 +559,7 @@ int main(int argc, char* argv[])
         printf ("Usage: sc filename\n");
         exit(1);
     }
-    yyin = fopen(argv[1], "r");         /* open input file */
+    // yyin = fopen(argv[1], "r");         /* open input file */
 
     /* perform parsing */
     if (yyparse() == 1)                 /* parsing */

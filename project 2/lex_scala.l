@@ -3,7 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include "y.tab.h"
+#include <string>
+#include "y.h"
 
 #define MAX_LINE_LENG 256
 #define LIST strcat(buf,yytext)
@@ -14,9 +15,8 @@
 int linenum = 1;
 char buf[MAX_LINE_LENG];
 char str_buf[MAX_LINE_LENG];
-
 %}
-%option c++
+
 DIGIT [0-9]
 NUMBER {DIGIT}+
 IDENTIFIER [a-zA-Z][a-zA-Z0-9]*

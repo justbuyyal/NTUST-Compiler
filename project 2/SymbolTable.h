@@ -58,7 +58,7 @@ private:
     string id_name;
     syntactic syn_dec;
 public:
-    Symbol(string id, syntactic syn):id_name(id), syn_dec(syn){}
+    Symbol(string* id, syntactic syn):id_name(*id), syn_dec(syn){}
     string get_name(){return id_name;}
     syntactic get_syn(){return syn_dec;}
     
@@ -73,6 +73,7 @@ public:
 
     virtual bool verified(vector<sValue>* tmp){return false;}
     virtual void set_type(variable v){}
+    virtual void load_data(variable d){}
 };
 
 class VarSymbol:public Symbol
@@ -80,8 +81,8 @@ class VarSymbol:public Symbol
 private:
     sValue variable_value;
 public:
-    VarSymbol(string id, sValue v, syntactic syn):Symbol(id, syn), variable_value(v){}
-    VarSymbol(string id, variable t, syntactic syn):Symbol(id, syn), variable_value(t){}
+    VarSymbol(string* id, sValue v, syntactic syn):Symbol(id, syn), variable_value(v){}
+    VarSymbol(string* id, variable t, syntactic syn):Symbol(id, syn), variable_value(t){}
     bool verified(){return variable_value.flag;}
     variable get_type(){return variable_value.get_type();}
     void set_data(sValue v){variable_value = v;}
@@ -94,34 +95,34 @@ private:
     sValue* array_value; // an array of data
     int arr_size;
 public:
-    ArrSymbol(string id, variable t, syntactic syn, int len):Symbol(id, syn), arr_size(len){
+    ArrSymbol(string* id, variable t, syntactic syn, int len):Symbol(id, syn), arr_size(len){
         array_value = new sValue[len];
-        for(auto iter : array_value){
-            iter->set_type(t);
+        for(int i = 0; i < len; i++){
+            array_value[i].set_type(t);
         }
     }
     variable get_type() {return array_value->get_type();}
-    sValue get_data(int index) {return array_value[index];}
+    sValue get_data(int index) {return *(array_value + index);}
     void new_value(sValue* ar) {array_value = ar;}
-    void new_data(sValue v, int index) {array_value[index] = v;}
+    void new_data(sValue v, int index) {*(array_value + index) = v;}
 };
 
 class FuncSymbol:public Symbol
 {
 private:
-    vector<VarSymbol>input_data;
+    vector<variable>input_data;
     variable return_type;
-    int data_size;
+    int arg_size;
 public:
-    FuncSymbol(string id, variable r, syntactic syn):Symbol(id, syn), return_type(r), data_size(0){}
+    FuncSymbol(string* id, variable r, syntactic syn):Symbol(id, syn), return_type(r), arg_size(0){}
     variable get_type() { return return_type;}
-    void load_data(VarSymbol i) {input_data.push_back(i); data_size++;}
+    void load_data(variable i) {input_data.push_back(i); arg_size++;}
     void set_type(variable v) {return_type = v;}
     bool verified(vector<sValue>* tmp){
-        if(tmp->size() != data_size) return false;
+        if(tmp->size() != arg_size) return false;
         if(return_type == NONE) return false;
-        for(int i = 0; i < data_size; i++){
-            if(input_data[i].get_type() != *(tmp + i)->get_type()){
+        for(int i = 0; i < arg_size; i++){
+            if(input_data[i] != tmp[i]->get_type()){
                 return false;
             }
         }
@@ -143,6 +144,7 @@ public:
             table.insert(pair<string, Symbol*>(s->get_name(), s));
             return 1;
         }
+        // found in table
         else return -1;
     }
     void dump(){
@@ -157,11 +159,12 @@ class Symbol_list
 {
     private:
         vector<SymbolTable>list;
-        int sum;
+        int index;
     public:
-        Symbol_list():sum(0){list.resize(1);}
-        Symbol* lookup(string name) {return list[sum].lookup(name);}
-        int insert(Symbol* s) {return list[sum].insert(s);}
-        void AddTable() {list.push_back(SymbolTable()); sum++;}
-        void PopTable() {list.pop_back(); sum--;}
+        Symbol_list():index(-1){}
+        Symbol* lookup(string* name) {return list[index].lookup(*name);}
+        int insert(Symbol* s) {return list[index].insert(s);}
+        void AddTable() {list.push_back(SymbolTable()); index++;}
+        void PopTable() {list.pop_back(); index--;}
+        void DumpTable() {cout << "table " << index << " dump: \n"; list[index].dump();}
 };
