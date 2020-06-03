@@ -70,8 +70,8 @@ void addSymbol(Symbol* s)
 %left '*' '/' '%'
 %nonassoc UMINUS
 // declare nonterminal
-%type <type> data_type optional_type arg return_type func_invocation
-%type <symbol_value> const_val expression
+%type <type> data_type optional_type return_type func_invocation
+%type <symbol_value> const_val expression arg
 %type <exp_list> comma_separated_exp comma_separated_exps
 %type <args_data> args optional_args
 %%
@@ -173,23 +173,6 @@ var_dec:
         ArrSymbol* temp = new ArrSymbol($2, $4, ARRAY, $6);
         addSymbol(temp);
     };
-arg:
-    ID ':' data_type
-    {
-        $$ = $3;
-    };
-args:
-    arg
-    {
-        vector<variable>* temp = new vector<variable>();
-        temp->push_back($1);
-        $$ = temp;
-    }
-    | args ',' arg
-    {
-        $1->push_back($3);
-        $$ = $1;
-    };
 optional_args:
     args
     {
@@ -197,6 +180,24 @@ optional_args:
     }| /* zero */
     {
         vector<variable>* temp = new vector<variable>();
+        $$ = temp;
+    };
+args:
+    arg
+    {
+        vector<variable>* temp = new vector<variable>();
+        temp->push_back($1->get_type());
+        $$ = temp;
+    }
+    | args ',' arg
+    {
+        $1->push_back($3->get_type());
+        $$ = $1;
+    };
+arg:
+    ID ':' data_type
+    {
+        VarSymbol* temp = new VarSymbol($1, $3, VARIABLE);
         $$ = temp;
     };
 return_type:
@@ -208,6 +209,39 @@ return_type:
     {
         $$ = NONE;
     };
+comma_separated_exps:
+    comma_separated_exp
+    {
+        $$ = $1;
+    }
+    | /* zero */
+    {
+        vector<sValue>* temp = new vector<sValue>();
+        $$ = temp;
+    };
+comma_separated_exp:
+    expression
+    {
+        vector<sValue>* temp = new vector<sValue>();
+        temp->push_back(*$1);
+        $$ = temp;
+    }
+    | comma_separated_exp ',' expression
+    {
+        $1->push_back(*$3);
+        $$ = $1;
+    };
+stmts:
+    stmt
+    | stmt stmts
+    | /* zero */;
+stmt:
+    simple
+    | expression
+    | func_invocation
+    | block
+    | conditional
+    | loop;
 simple:
     ID '=' expression
     {
@@ -241,37 +275,6 @@ simple:
     }
     | RETURN
     | RETURN expression;
-comma_separated_exp:
-    expression
-    {
-        vector<sValue>* temp = new vector<sValue>();
-        temp->push_back(*$1);
-        $$ = temp;
-    }
-    | comma_separated_exp ',' expression
-    {
-        $1->push_back(*$3);
-        $$ = $1;
-    };
-comma_separated_exps:
-    comma_separated_exp
-    {
-        $$ = $1;
-    }
-    | /* zero */
-    {
-        vector<sValue>* temp = new vector<sValue>();
-        $$ = temp;
-    };
-func_invocation:
-    ID '(' comma_separated_exps ')'
-    {
-        Symbol* f_temp  = tables.lookup($1);
-        if(f_temp == NULL) Symbol_Not_Found(); // no declaration before
-        if(f_temp->get_syn() != FUNCTION) Assign_Error(f_temp->get_name()); // Function
-        if(!f_temp->verified($3)) yyerror("func_invocation: Function input data correspondence error !");
-        $$ = f_temp->get_type(); // return function return type
-    };
 expression:
     const_val
     {
@@ -459,6 +462,15 @@ expression:
         $1->bval = ($1->bval || $3->bval);
         $$ = $1;
     };
+func_invocation:
+    ID '(' comma_separated_exps ')'
+    {
+        Symbol* f_temp  = tables.lookup($1);
+        if(f_temp == NULL) Symbol_Not_Found(); // no declaration before
+        if(f_temp->get_syn() != FUNCTION) Assign_Error(f_temp->get_name()); // Function
+        if(!f_temp->verified($3)) yyerror("func_invocation: Function input data correspondence error !");
+        $$ = f_temp->get_type(); // return function return type
+    };
 block:
     '{'
     {
@@ -503,17 +515,9 @@ loop:
         if($6 > $8) Assign_Error(temp->get_name());
     }
     block_or_simple;
-stmt:
-    simple
-    | expression
-    | func_invocation
-    | block
-    | conditional
-    | loop;
-stmts:
-    stmt
-    | stmt stmts
-    | /* zero */;
+methods:
+    method
+    | methods method;
 method:
     DEF ID '(' optional_args ')' return_type
     {
@@ -534,9 +538,6 @@ method:
         tables.DumpTable();
         tables.PopTable();
     };
-methods:
-    method
-    | methods method;
 program:
     OBJECT ID
     {
