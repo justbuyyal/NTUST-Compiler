@@ -1,6 +1,6 @@
 %{
 #include "SymbolTable.h"
-#include "lex.yy.cc"
+#include "lex.yy.cpp"
 #define Trace(t)    printf(t)
 
 Symbol_list tables;
@@ -53,7 +53,7 @@ void addSymbol(Symbol* s)
 }
 /* tokens */
 // keywords
-%token SEMICOLON BOOLEAN BREAK CHAR CASE CLASS CONTINUE DEF DO ELSE EXIT FALSE FLOAT FOR IF INT NULL OBJECT PRINT PRINTLN REPEAT RETURN STRING TO TRUE TYPE VAL VAR WHILE READ
+%token SEMICOLON BOOLEAN BREAK CHAR CASE CLASS CONTINUE DEF DO ELSE EXIT FALSE FLOAT FOR IF INT NULL_ OBJECT PRINT PRINTLN REPEAT RETURN STRING TO TRUE TYPE VAL VAR WHILE READ
 // token assign
 %token <bval> BOOL_VAL
 %token <ival> INT_VAL
@@ -554,14 +554,6 @@ program:
 
 int main(int argc, char* argv[])
 {
-    /* open the source program file */
-    if (argc != 2) {
-        printf ("Usage: sc filename\n");
-        exit(1);
-    }
-    // yyin = fopen(argv[1], "r");         /* open input file */
-
-    /* perform parsing */
-    if (yyparse() == 1)                 /* parsing */
-        yyerror("Parsing error !");     /* syntax error */
+	yyparse();
+	return 0;
 }

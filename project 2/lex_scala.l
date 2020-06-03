@@ -3,8 +3,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <iostream>
 #include <string>
-#include "y.h"
+#include "y.tab.hpp"
+using namespace std;
 
 #define MAX_LINE_LENG 256
 #define LIST strcat(buf,yytext)
@@ -52,7 +54,7 @@ break           {token(BREAK);}
 char            {token(CHAR);}
 case            {token(CASE);}
 class           {token(CLASS);}
-continue        {token(CONTIUNE);}
+continue        {token(CONTINUE);}
 def             {token(DEF);}
 do              {token(DO);}
 else            {token(ELSE);}
@@ -61,7 +63,7 @@ float           {token(FLOAT);}
 for             {token(FOR);}
 if              {token(IF);}
 int             {token(INT);}
-null            {token(NULL);}
+null            {token(NULL_);}
 object          {token(OBJECT);}
 print           {token(PRINT);}
 println         {token(PRINTLN);}
@@ -112,7 +114,7 @@ false           {
 "//"            {
     strcat(buf, "//");
     char temp, x[1];
-    while((temp = input()) != '\n')
+    while((temp = yyinput()) != '\n')
     {
         x[0] = temp;
         strcat(buf, x);

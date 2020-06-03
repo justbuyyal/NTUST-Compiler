@@ -65,11 +65,11 @@ public:
     virtual bool verified(){return false;}
     virtual variable get_type(){return NONE;}
     virtual void set_data(sValue v){}
-    virtual sValue get_data(){return sValue();}
+    virtual sValue* get_data(){return new sValue();}
 
     virtual void new_value(sValue* ar){}
     virtual void new_data(sValue v, int index){}
-    virtual sValue get_data(int index){return sValue();}
+    virtual sValue* get_data(int index){return new sValue();}
 
     virtual bool verified(vector<sValue>* tmp){return false;}
     virtual void set_type(variable v){}
@@ -86,7 +86,7 @@ public:
     bool verified(){return variable_value.flag;}
     variable get_type(){return variable_value.get_type();}
     void set_data(sValue v){variable_value = v;}
-    sValue get_data(){return variable_value;}
+    sValue* get_data(){return &variable_value;}
 };
 
 class ArrSymbol:public Symbol
@@ -102,7 +102,7 @@ public:
         }
     }
     variable get_type() {return array_value->get_type();}
-    sValue get_data(int index) {return *(array_value + index);}
+    sValue* get_data(int index) {return (array_value + index);}
     void new_value(sValue* ar) {array_value = ar;}
     void new_data(sValue v, int index) {*(array_value + index) = v;}
 };
@@ -122,7 +122,7 @@ public:
         if(tmp->size() != arg_size) return false;
         if(return_type == NONE) return false;
         for(int i = 0; i < arg_size; i++){
-            if(input_data[i] != tmp[i]->get_type()){
+            if(input_data[i] != (*tmp)[i].get_type()){
                 return false;
             }
         }

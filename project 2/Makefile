@@ -9,11 +9,11 @@ parser: lex.yy.cc y.tab.cpp SymbolTable.h
 	$(CC) y.tab.cpp $(TABLE) -o parser -ll -ly -std=c++11 -Wno-deprecated-register
 
 lex.yy.cc:
-	flex -+ $(LEX_FILENAME)
+	flex -o lex.yy.cpp $(LEX_FILENAME)
 
 y.tab.cpp:
 	bison -d $(YACC_FILENAME) -o y.tab.cpp
 
 .PHONY: clean
 clean:
-	rm -f lex.yy.cc lex.yy.c y.tab.cpp y.tab.h y.h y.tab.c parser
+	rm -f *.cc *.c parser *.hpp *.cpp
