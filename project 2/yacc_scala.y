@@ -2,8 +2,8 @@
 #include "SymbolTable.h"
 #include "lex.yy.cpp"
 #define Trace(t)    printf(t)
-
 Symbol_list tables;
+
 void yyerror(string msg)
 {
     cout << msg << endl;
@@ -75,6 +75,19 @@ void addSymbol(Symbol* s)
 %type <exp_list> comma_separated_exp comma_separated_exps
 %type <args_data> args optional_args
 %%
+program:
+    OBJECT ID
+    {
+        Symbol* temp = new Symbol($2, _OBJECT);
+        addSymbol(temp); // add object symbol to table
+        tables.AddTable(); // create a new table for current scope
+    }
+    '{' const_var_dec methods '}'
+    {
+        // show the Symbols of top table
+        tables.DumpTable();
+        tables.PopTable();
+    };
 const_var_dec:
     const_dec const_var_dec
     | var_dec const_var_dec
@@ -198,7 +211,7 @@ arg:
     ID ':' data_type
     {
         VarSymbol* temp = new VarSymbol($1, $3, VARIABLE);
-        $$ = temp;
+        $$ = temp->get_data();
     };
 return_type:
     ':' data_type
@@ -231,17 +244,18 @@ comma_separated_exp:
         $1->push_back(*$3);
         $$ = $1;
     };
-stmts:
-    stmt
-    | stmt stmts
-    | /* zero */;
 stmt:
     simple
-    | expression
     | func_invocation
+    {
+        if($1 != NONE) yyerror("Can not have return type");
+    }
     | block
     | conditional
     | loop;
+stmts:
+    stmt stmts
+    | /* zero */;
 simple:
     ID '=' expression
     {
@@ -264,17 +278,35 @@ simple:
         if(!$3->flag) yyerror("Unchecked value !");
         // assign a new value
         temp->new_data(*$6, $3->ival);
-    }|
-    PRINT '(' expression ')'
+    }
+    | PRINT '(' expression ')'
     | PRINTLN '(' expression ')'
     | READ ID
     {
         Symbol* temp = tables.lookup($2);
         if(temp == NULL) Symbol_Not_Found(); // no declaration before
-        // $$ = temp;
+        // $$ = temp;FUNCTION
     }
     | RETURN
-    | RETURN expression;
+    {
+        /* search table */
+        if(1){
+            
+        }
+        else{
+            yyerror("None functional return !"); /* there is no function */
+        }
+    }
+    | RETURN expression
+    {
+        /* search table */
+        if(1){
+            
+        }
+        else{
+            yyerror("None functional return !"); /* there is no function */
+        }
+    };
 expression:
     const_val
     {
@@ -286,12 +318,6 @@ expression:
         if(temp == NULL) Symbol_Not_Found(); // no declaration before
         if(temp->get_syn() != VARIABLE) Assign_Error(temp->get_name()); // Variable
         $$ = temp->get_data(); // return data
-    }
-    | func_invocation
-    {
-        // function call
-        sValue* temp = new sValue($1);
-        $$ = temp;
     }
     | ID '[' expression ']'
     {
@@ -461,6 +487,12 @@ expression:
         if(temp != bOOL) Wrong_Data_Type(); // only boolean can compare
         $1->bval = ($1->bval || $3->bval);
         $$ = $1;
+    }
+    | func_invocation
+    {
+        // function call
+        sValue* temp = new sValue($1);
+        $$ = temp;
     };
 func_invocation:
     ID '(' comma_separated_exps ')'
@@ -491,13 +523,10 @@ conditional:
         // only boolean can compare
         if($3->get_type() != bOOL) Wrong_Data_Type();
     } 
-    block_or_simple ELSE block_or_simple
-    | IF '(' expression ')' 
-    {
-        // only boolean can compare
-        if($3->get_type() != bOOL) Wrong_Data_Type();
-    }
-    block_or_simple;
+    block_or_simple else_stmt;
+else_stmt:
+    ELSE block_or_simple
+    | /* zero */;
 loop:
     WHILE '(' expression ')'
     {
@@ -526,7 +555,7 @@ method:
         if($4->size() > 0){
             for(int i = 0; i < $4->size(); i++){
                 // load args data type
-                temp->load_data($4[i]);
+                temp->load_data((*$4)[i]);
             }
         }
         addSymbol(temp); // add function symbol to table
@@ -538,23 +567,15 @@ method:
         tables.DumpTable();
         tables.PopTable();
     };
-program:
-    OBJECT ID
-    {
-        Symbol* temp = new Symbol($2, OBJECT);
-        addSymbol(temp); // add object symbol to table
-        tables.AddTable(); // create a new table for current scope
-    }
-    '{' const_var_dec methods '}'
-    {
-        // show the Symbols of top table
-        tables.DumpTable();
-        tables.PopTable();
-    };
 %%
 
 int main(int argc, char* argv[])
 {
-	yyparse();
+    if(argc != 2) exit(1);
+    yyin = fopen(argv[1], "r");
+    if(yyparse() == 1)
+    {
+        yyerror("Parsing error !\n"); /* syntax error */
+    }
 	return 0;
 }

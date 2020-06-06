@@ -12,7 +12,7 @@ lex.yy.cc:
 	flex -o lex.yy.cpp $(LEX_FILENAME)
 
 y.tab.cpp:
-	bison -d $(YACC_FILENAME) -o y.tab.cpp
+	bison -dv $(YACC_FILENAME) -o y.tab.cpp
 
 .PHONY: clean
 clean:

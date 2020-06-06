@@ -24,7 +24,7 @@ enum syntactic
     VARIABLE,
     ARRAY,
     FUNCTION,
-    OBJECT,
+    _OBJECT,
     _ERR
 };
 
@@ -113,6 +113,7 @@ private:
     vector<variable>input_data;
     variable return_type;
     int arg_size;
+    sValue* return_value;
 public:
     FuncSymbol(string* id, variable r, syntactic syn):Symbol(id, syn), return_type(r), arg_size(0){}
     variable get_type() { return return_type;}
@@ -128,6 +129,7 @@ public:
         }
         return true;
     }
+    void set_return_value(sValue* tmp) {return_value = tmp;}
 };
 
 class SymbolTable
@@ -167,4 +169,11 @@ class Symbol_list
         void AddTable() {list.push_back(SymbolTable()); index++;}
         void PopTable() {list.pop_back(); index--;}
         void DumpTable() {cout << "table " << index << " dump: \n"; list[index].dump();}
+        int fun_table() {
+            if(index < 1) {
+                cout << "error function return\n";
+                return -1;
+            }
+            else return index-1;
+        }
 };
