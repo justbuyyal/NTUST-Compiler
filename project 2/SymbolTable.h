@@ -63,7 +63,7 @@ public:
     syntactic get_syn(){return syn_dec;}
     
     virtual bool verified(){return false;}
-    virtual variable get_type(){return NONE;}
+    virtual variable get_type() {return NONE;}
     virtual void set_data(sValue v){}
     virtual sValue* get_data(){return new sValue();}
 
@@ -72,7 +72,6 @@ public:
     virtual sValue* get_data(int index){return new sValue();}
 
     virtual bool verified(vector<sValue>* tmp){return false;}
-    virtual void set_type(variable v){}
     virtual void load_data(variable d){}
 };
 
@@ -93,18 +92,25 @@ class ArrSymbol:public Symbol
 {
 private:
     sValue* array_value; // an array of data
+    variable array_type;
     int arr_size;
 public:
-    ArrSymbol(string* id, variable t, syntactic syn, int len):Symbol(id, syn), arr_size(len){
+    ArrSymbol(string* id, variable t, syntactic syn, int len):Symbol(id, syn), array_type(t), arr_size(len){
         array_value = new sValue[len];
         for(int i = 0; i < len; i++){
             array_value[i].set_type(t);
         }
     }
-    variable get_type() {return array_value->get_type();}
-    sValue* get_data(int index) {return (array_value + index);}
+    variable get_type() {return array_type;}
+    sValue* get_data(int index) {
+        if(index < arr_size - 1) return (array_value + index);
+        else cout << "Array access out of range\n";
+    }
     void new_value(sValue* ar) {array_value = ar;}
-    void new_data(sValue v, int index) {*(array_value + index) = v;}
+    void new_data(sValue v, int index) {
+        if(index < arr_size - 1) *(array_value + index) = v;
+        else cout << "Array access out of range\n";
+    }
 };
 
 class FuncSymbol:public Symbol
@@ -118,7 +124,6 @@ public:
     FuncSymbol(string* id, variable r, syntactic syn):Symbol(id, syn), return_type(r), arg_size(0){}
     variable get_type() { return return_type;}
     void load_data(variable i) {input_data.push_back(i); arg_size++;}
-    void set_type(variable v) {return_type = v;}
     bool verified(vector<sValue>* tmp){
         if(tmp->size() != arg_size) return false;
         if(return_type == NONE) return false;
@@ -142,6 +147,7 @@ public:
         else return NULL;
     }
     int insert(Symbol* s){
+        // cout << "Current insert\n";
         if(lookup(s->get_name()) == NULL){
             table.insert(pair<string, Symbol*>(s->get_name(), s));
             return 1;
@@ -152,7 +158,28 @@ public:
     void dump(){
         for(auto iter : table)
         {
-            cout << "Name: " << iter.second->get_name() << " ,Type: " << iter.second->get_type() << endl;
+            string dump_type, dump_syn;
+            // cout << iter.first << " : " << iter.second->get_type() << endl;
+            switch (iter.second->get_type())
+            {
+                case 0: dump_type = "int";break;
+                case 1: dump_type = "float";break;
+                case 2: dump_type = "bool";break;
+                case 3: dump_type = "char";break;
+                case 4: dump_type = "string";break;
+                case 5: dump_type = "NONE";break;
+                default: dump_type = "NONE"; break;
+            }
+            switch (iter.second->get_syn())
+            {
+                case 0: dump_syn = "const";break;
+                case 1: dump_syn = "variable";break;
+                case 2: dump_syn = "array";break;
+                case 3: dump_syn = "function";break;
+                case 4: dump_syn = "object";break;
+                case 5: dump_syn = "ERROR";break;
+            }
+            cout << "Name: " << iter.second->get_name() << "\tType: " << dump_type << "\tSyn: " << dump_syn << endl;
         }
     }
 };
@@ -163,17 +190,23 @@ class Symbol_list
         vector<SymbolTable>list;
         int index;
     public:
-        Symbol_list():index(-1){}
-        Symbol* lookup(string* name) {return list[index].lookup(*name);}
-        int insert(Symbol* s) {return list[index].insert(s);}
-        void AddTable() {list.push_back(SymbolTable()); index++;}
-        void PopTable() {list.pop_back(); index--;}
-        void DumpTable() {cout << "table " << index << " dump: \n"; list[index].dump();}
-        int fun_table() {
-            if(index < 1) {
-                cout << "error function return\n";
-                return -1;
+        Symbol_list() {index = 0; list.resize(1); cout << "initialized table created" << endl;}
+        Symbol* lookup(string* name) {
+            // cout << "lookup" << endl;
+            int temp = index;
+            while(temp >= 0){
+                if(list[temp].lookup(*name) != NULL) return list[temp].lookup(*name);
+                temp--;
             }
-            else return index-1;
+            return NULL;
+        }
+        int insert(Symbol* s) {
+            return list[index].insert(s);
+        }
+        void AddTable() {cout << "create new table" << endl; list.push_back(SymbolTable()); index++;}
+        void PopTable() {cout << "pop table\n" << endl; list.pop_back(); index--;}
+        void DumpTable() {
+                cout << "table " << index << " dump: \n------------------------------------\n"; list[index].dump();
+                cout << "------------------------------------\n";
         }
 };

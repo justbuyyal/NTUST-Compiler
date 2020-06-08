@@ -1,8 +1,12 @@
 %{
 #include "SymbolTable.h"
 #include "lex.yy.cpp"
-#define Trace(t)    printf(t)
-Symbol_list tables;
+#define Trace(t)    if(0) {printf(t);}
+Symbol_list* tables = new Symbol_list();
+vector<Symbol*>current_method;
+vector<Symbol*>arg_data;
+bool main_method_flag = false;
+int object_count = 0;
 
 void yyerror(string msg)
 {
@@ -37,7 +41,8 @@ void Wrong_Data_Type()
 }
 void addSymbol(Symbol* s)
 {
-    if(tables.insert(s) == -1) yyerror("Symbol already exist !");
+    if(tables->insert(s) == -1) yyerror("Symbol already exist !");
+    else Trace("Insert Symbol Successful\n");
 }
 %}
 %union {
@@ -70,28 +75,76 @@ void addSymbol(Symbol* s)
 %left '*' '/' '%'
 %nonassoc UMINUS
 // declare nonterminal
-%type <type> data_type optional_type return_type func_invocation
-%type <symbol_value> const_val expression arg
+%type <type> data_type optional_type return_type func_invocation arg
+%type <symbol_value> const_val expression
 %type <exp_list> comma_separated_exp comma_separated_exps
 %type <args_data> args optional_args
 %%
 program:
     OBJECT ID
     {
-        Symbol* temp = new Symbol($2, _OBJECT);
-        addSymbol(temp); // add object symbol to table
-        tables.AddTable(); // create a new table for current scope
+        Trace("In object\n");
+        if(object_count < 1){
+            Symbol* temp = new Symbol($2, _OBJECT);
+            addSymbol(temp); // add object symbol to table
+            ++object_count;
+        }
+        else yyerror("Can only have one object !");
+        tables->AddTable(); // create a new table for next scope
     }
-    '{' const_var_dec methods '}'
+    '{' dec_and_methods '}'
     {
+        Trace("object out\n");
         // show the Symbols of top table
-        tables.DumpTable();
-        tables.PopTable();
+        tables->DumpTable();
+        if(!main_method_flag) yyerror("There is no 'main' method !");
+        tables->PopTable();
     };
-const_var_dec:
-    const_dec const_var_dec
-    | var_dec const_var_dec
-    | /* zero */;
+dec_and_methods:
+    const_dec dec_and_methods
+    | var_dec dec_and_methods
+    | method dec_and_methods
+    | const_dec
+    | var_dec
+    | method;
+dec_and_stmts:
+    const_dec dec_and_stmts
+    | var_dec dec_and_stmts
+    | stmt dec_and_stmts
+    | /* zero  */;
+method:
+    DEF ID '(' optional_args ')' return_type
+    {
+        Trace("In method\n");
+        FuncSymbol* temp = new FuncSymbol($2, $6, FUNCTION);
+        // input data assign to function symbol
+        if($4->size() > 0){
+            Trace("load args\n");
+            for(int i = 0; i < $4->size(); i++){
+                // load args data type
+                temp->load_data((*$4)[i]);
+            }
+        }
+        current_method.push_back(temp);
+        if(temp->get_name() == "main") main_method_flag = true;
+        addSymbol(temp); // add function symbol to table
+        tables->AddTable(); // create a new table for current scope
+        /* Insert args to table */
+        if(arg_data.size() > 0) {
+            for(int i = 0; i < arg_data.size(); i++){
+                addSymbol(arg_data[i]);
+            }
+            arg_data.clear();
+        }
+    }
+    '{' dec_and_stmts '}'
+    {
+        Trace("method out\n");
+        current_method.pop_back();
+        // show the Symbols of top table
+        tables->DumpTable();
+        tables->PopTable();
+    };
 data_type:
     INT
     {
@@ -108,10 +161,12 @@ data_type:
     CHAR
     {
         $$ = cHAR;
+        Trace("get char\n");
     }|
     STRING
     {
         $$ = sTRING;
+        Trace("get string\n");
     };
 const_val:
     INT_VAL
@@ -181,8 +236,10 @@ var_dec:
     }|
     VAR ID ':' data_type '[' INT_VAL ']'
     {
+        Trace("In array\n");
         // array declaration
         if($6 < 1) Array_Error(1);
+        Trace("array check size\n");
         ArrSymbol* temp = new ArrSymbol($2, $4, ARRAY, $6);
         addSymbol(temp);
     };
@@ -190,37 +247,44 @@ optional_args:
     args
     {
         $$ = $1;
+        Trace("Args\n");
     }| /* zero */
     {
         vector<variable>* temp = new vector<variable>();
         $$ = temp;
+        Trace("No Args\n");
     };
 args:
     arg
     {
         vector<variable>* temp = new vector<variable>();
-        temp->push_back($1->get_type());
+        temp->push_back($1);
         $$ = temp;
+        Trace("First arg\n");
     }
     | args ',' arg
     {
-        $1->push_back($3->get_type());
+        $1->push_back($3);
         $$ = $1;
+        Trace("Adding arg\n");
     };
 arg:
     ID ':' data_type
     {
         VarSymbol* temp = new VarSymbol($1, $3, VARIABLE);
-        $$ = temp->get_data();
+        arg_data.push_back(temp);
+        $$ = $3;
     };
 return_type:
     ':' data_type
     {
         $$ = $2;
+        Trace("Have return type\n");
     }
     | /* zero */
     {
         $$ = NONE;
+        Trace("No return type\n");
     };
 comma_separated_exps:
     comma_separated_exp
@@ -253,13 +317,10 @@ stmt:
     | block
     | conditional
     | loop;
-stmts:
-    stmt stmts
-    | /* zero */;
 simple:
     ID '=' expression
     {
-        Symbol* temp = tables.lookup($1);
+        Symbol* temp = tables->lookup($1);
         if(temp == NULL) Symbol_Not_Found(); // no declaration before
         if(temp->get_type() != $3->get_type()) DiffDataType();
         if(temp->get_syn() != VARIABLE) Assign_Error(temp->get_name()); // Variable
@@ -268,30 +329,31 @@ simple:
     }|
     ID '[' expression ']' '=' expression
     {
-        Symbol* temp = tables.lookup($1);
+        Symbol* temp = tables->lookup($1);
         if(temp == NULL) Symbol_Not_Found(); // no declaration before
         if(temp->get_type() != $6->get_type()) DiffDataType();
         if(temp->get_syn() != ARRAY) Assign_Error(temp->get_name()); // Array
         // array index error
         if($3->get_type() != iNT) Array_Error(0);
         // array index error(unset)
-        if(!$3->flag) yyerror("Unchecked value !");
+        // if(!$3->flag) yyerror("Unchecked value !");
         // assign a new value
-        temp->new_data(*$6, $3->ival);
+        if($3->flag) temp->new_data(*$6, $3->ival);
     }
     | PRINT '(' expression ')'
     | PRINTLN '(' expression ')'
     | READ ID
     {
-        Symbol* temp = tables.lookup($2);
+        Symbol* temp = tables->lookup($2);
         if(temp == NULL) Symbol_Not_Found(); // no declaration before
         // $$ = temp;FUNCTION
     }
     | RETURN
     {
-        /* search table */
-        if(1){
-            
+        int temp = current_method.size();
+        /* check the current method declared before and check return type */
+        if(temp > 0 && current_method[temp - 1]->get_type() == NONE){
+            Trace("return nothing\n");
         }
         else{
             yyerror("None functional return !"); /* there is no function */
@@ -299,13 +361,7 @@ simple:
     }
     | RETURN expression
     {
-        /* search table */
-        if(1){
-            
-        }
-        else{
-            yyerror("None functional return !"); /* there is no function */
-        }
+        /* expression will lookup by itself, so do nothing */
     };
 expression:
     const_val
@@ -314,7 +370,7 @@ expression:
     }
     | ID
     {
-        Symbol* temp = tables.lookup($1);
+        Symbol* temp = tables->lookup($1);
         if(temp == NULL) Symbol_Not_Found(); // no declaration before
         if(temp->get_syn() != VARIABLE) Assign_Error(temp->get_name()); // Variable
         $$ = temp->get_data(); // return data
@@ -322,11 +378,11 @@ expression:
     | ID '[' expression ']'
     {
         if($3->get_type() != iNT) Array_Error(0); // array index error
-        Symbol* temp = tables.lookup($1);
+        Symbol* temp = tables->lookup($1);
         if(temp == NULL) Symbol_Not_Found(); // no declaration before
         if(temp->get_syn() != ARRAY) Assign_Error(temp->get_name()); // Array
         // return array value[ival]
-        $$ = temp->get_data($3->ival);
+        if($3->flag) $$ = temp->get_data($3->ival);
     }
     | '-' expression %prec UMINUS
     {
@@ -413,80 +469,265 @@ expression:
     }
     | expression '<' expression
     {
+        Trace("< compare\n");
         if($1->get_type() != $3->get_type()) DiffDataType();
         variable temp = $1->get_type();
-        if(temp != bOOL) Wrong_Data_Type(); // only boolean can compare
-        $1->bval = ($1->bval < $3->bval);
-        $$ = $1;
+        bool result;
+        if(temp == iNT)
+        {
+            result = ($1->ival < $3->ival);
+        }
+        else if(temp == fLOAT)
+        {
+            result = ($1->fval < $3->fval);
+        }
+        else if(temp == bOOL)
+        {
+            result = ($1->bval < $3->bval);
+        }
+        else if(temp == cHAR)
+        {
+            result = ($1->cval < $3->cval);
+        }
+        else if(temp == sTRING)
+        {
+            result = ($1->strval < $3->strval);
+        }
+        else
+        {
+            Wrong_Data_Type();
+        }
+        sValue* output = new sValue(bOOL);
+        output->assign_bool(result);
+        Trace("set < bool\n");
+        $$ = output;
     }
     | expression '>' expression
     {
+        Trace("> compare\n");
         if($1->get_type() != $3->get_type()) DiffDataType();
         variable temp = $1->get_type();
-        if(temp != bOOL) Wrong_Data_Type(); // only boolean can compare
-        $1->bval = ($1->bval > $3->bval);
-        $$ = $1;
+        bool result;
+        if(temp == iNT)
+        {
+            result = ($1->ival > $3->ival);
+        }
+        else if(temp == fLOAT)
+        {
+            result = ($1->fval > $3->fval);
+        }
+        else if(temp == bOOL)
+        {
+            result = ($1->bval > $3->bval);
+        }
+        else if(temp == cHAR)
+        {
+            result = ($1->cval > $3->cval);
+        }
+        else if(temp == sTRING)
+        {
+            result = ($1->strval > $3->strval);
+        }
+        else
+        {
+            Wrong_Data_Type();
+        }
+        sValue* output = new sValue(bOOL);
+        output->assign_bool(result);
+        Trace("set > bool\n");
+        $$ = output;
     }
     | expression LE expression
     {
         // <=
+        Trace("<= compare\n");
         if($1->get_type() != $3->get_type()) DiffDataType();
         variable temp = $1->get_type();
-        if(temp != bOOL) Wrong_Data_Type(); // only boolean can compare
-        $1->bval = ($1->bval <= $3->bval);
-        $$ = $1;
+        bool result;
+        if(temp == iNT)
+        {
+            result = ($1->ival <= $3->ival);
+        }
+        else if(temp == fLOAT)
+        {
+            result = ($1->fval <= $3->fval);
+        }
+        else if(temp == bOOL)
+        {
+            result = ($1->bval <= $3->bval);
+        }
+        else if(temp == cHAR)
+        {
+            result = ($1->cval <= $3->cval);
+        }
+        else if(temp == sTRING)
+        {
+            result = ($1->strval <= $3->strval);
+        }
+        else
+        {
+            Wrong_Data_Type();
+        }
+        sValue* output = new sValue(bOOL);
+        output->assign_bool(result);
+        Trace("set <= bool\n");
+        $$ = output;
     }
     | expression BE expression
     {
         // >=
+        Trace(">= compare\n");
         if($1->get_type() != $3->get_type()) DiffDataType();
         variable temp = $1->get_type();
-        if(temp != bOOL) Wrong_Data_Type(); // only boolean can compare
-        $1->bval = ($1->bval >= $3->bval);
-        $$ = $1;
+        bool result;
+        if(temp == iNT)
+        {
+            result = ($1->ival >= $3->ival);
+        }
+        else if(temp == fLOAT)
+        {
+            result = ($1->fval >= $3->fval);
+        }
+        else if(temp == bOOL)
+        {
+            result = ($1->bval >= $3->bval);
+        }
+        else if(temp == cHAR)
+        {
+            result = ($1->cval >= $3->cval);
+        }
+        else if(temp == sTRING)
+        {
+            result = ($1->strval >= $3->strval);
+        }
+        else
+        {
+            Wrong_Data_Type();
+        }
+        sValue* output = new sValue(bOOL);
+        output->assign_bool(result);
+        Trace("set >= bool\n");
+        $$ = output;
     }
     | expression DE expression
     {
         // ==
+        Trace("== compare\n");
         if($1->get_type() != $3->get_type()) DiffDataType();
         variable temp = $1->get_type();
-        if(temp != bOOL) Wrong_Data_Type(); // only boolean can compare
-        $1->bval = ($1->bval == $3->bval);
-        $$ = $1;
+        bool result;
+        if(temp == iNT)
+        {
+            result = ($1->ival == $3->ival);
+        }
+        else if(temp == fLOAT)
+        {
+            result = ($1->fval == $3->fval);
+        }
+        else if(temp == bOOL)
+        {
+            result = ($1->bval == $3->bval);
+        }
+        else if(temp == cHAR)
+        {
+            result = ($1->cval == $3->cval);
+        }
+        else if(temp == sTRING)
+        {
+            result = ($1->strval == $3->strval);
+        }
+        else
+        {
+            Wrong_Data_Type();
+        }
+        sValue* output = new sValue(bOOL);
+        output->assign_bool(result);
+        Trace("set == bool\n");
+        $$ = output;
     }
     | expression NE expression
     {
         // !=
+        Trace("!= compare\n");
         if($1->get_type() != $3->get_type()) DiffDataType();
         variable temp = $1->get_type();
-        if(temp != bOOL) Wrong_Data_Type(); // only boolean can compare
-        $1->bval = ($1->bval != $3->bval);
-        $$ = $1;
+        bool result = false;
+        if(temp == iNT)
+        {
+            result = ($1->ival != $3->ival);
+        }
+        else if(temp == fLOAT)
+        {
+            result = ($1->fval != $3->fval);
+        }
+        else if(temp == bOOL)
+        {
+            result = ($1->bval != $3->bval);
+        }
+        else if(temp == cHAR)
+        {
+            result = ($1->cval != $3->cval);
+        }
+        else if(temp == sTRING)
+        {
+            result = ($1->strval != $3->strval);
+        }
+        else
+        {
+            Wrong_Data_Type();
+        }
+        sValue* output = new sValue(bOOL);
+        output->assign_bool(result);
+        Trace("set != bool\n");
+        $$ = output;
     }
     | '!' expression
     {
         // only boolean can compare
-        if($2->get_type() != bOOL) Wrong_Data_Type();
-        $2->bval = !($2->bval);
-        $$ = $2;
+        if($2->get_type() != bOOL) {
+            Wrong_Data_Type();
+            $$ = $2;
+        }
+        else
+        {
+            cout << "Is bool\n";
+            sValue* output = new sValue(bOOL);
+            output->assign_bool(!($2->bval));
+            $$ = output;
+        }
     }
     | expression AND_OP expression
     {
         // &&
         if($1->get_type() != $3->get_type()) DiffDataType();
         variable temp = $1->get_type();
-        if(temp != bOOL) Wrong_Data_Type(); // only boolean can compare
-        $1->bval = ($1->bval && $3->bval);
-        $$ = $1;
+        if(temp != bOOL) {
+            Wrong_Data_Type(); // only boolean can compare
+            $$ = $1;
+        }
+        else {
+            cout << "Is bool\n";
+            sValue* output = new sValue(bOOL);
+            output->assign_bool(($1->bval && $3->bval));
+            $$ = output;
+        }
     }
     | expression OR_OP expression
     {
         // ||
         if($1->get_type() != $3->get_type()) DiffDataType();
         variable temp = $1->get_type();
-        if(temp != bOOL) Wrong_Data_Type(); // only boolean can compare
-        $1->bval = ($1->bval || $3->bval);
-        $$ = $1;
+        if(temp != bOOL) {
+             Wrong_Data_Type(); // only boolean can compare
+             $$ = $1;
+        }
+        else {
+            cout << "Is bool\n";
+            $1->bval = ($1->bval || $3->bval);
+            sValue* output = new sValue(bOOL);
+            output->assign_bool(($1->bval || $3->bval));
+            $$ = output;
+        }
     }
     | func_invocation
     {
@@ -497,7 +738,7 @@ expression:
 func_invocation:
     ID '(' comma_separated_exps ')'
     {
-        Symbol* f_temp  = tables.lookup($1);
+        Symbol* f_temp  = tables->lookup($1);
         if(f_temp == NULL) Symbol_Not_Found(); // no declaration before
         if(f_temp->get_syn() != FUNCTION) Assign_Error(f_temp->get_name()); // Function
         if(!f_temp->verified($3)) yyerror("func_invocation: Function input data correspondence error !");
@@ -506,13 +747,15 @@ func_invocation:
 block:
     '{'
     {
-        tables.AddTable();  // create a new table for current scope
+        Trace("In block\n");
+        tables->AddTable();  // create a new table for current scope
     }
-    const_var_dec stmts '}'
+    dec_and_stmts '}'
     {
+        Trace("block out\n");
         // show the Symbols of top table
-        tables.DumpTable();
-        tables.PopTable();
+        tables->DumpTable();
+        tables->PopTable();
     };
 block_or_simple:
     block
@@ -530,13 +773,15 @@ else_stmt:
 loop:
     WHILE '(' expression ')'
     {
+        Trace("In while\n");
         // only boolean can compare
         if($3->get_type() != bOOL) Wrong_Data_Type();
     } 
     block_or_simple
     | FOR '(' ID '<' '-' INT_VAL TO INT_VAL ')'
     {
-        Symbol* temp = tables.lookup($3);
+        Trace("In for\n");
+        Symbol* temp = tables->lookup($3);
         if(temp == NULL) Symbol_Not_Found(); // no declaration before
         if(temp->get_syn() != VARIABLE) Assign_Error(temp->get_name()); // Variable
         if(temp->get_type() != iNT) Assign_Error(temp->get_name()); // integer
@@ -544,29 +789,6 @@ loop:
         if($6 > $8) Assign_Error(temp->get_name());
     }
     block_or_simple;
-methods:
-    method
-    | methods method;
-method:
-    DEF ID '(' optional_args ')' return_type
-    {
-        FuncSymbol* temp = new FuncSymbol($2, $6, FUNCTION);
-        // input data assign to function symbol
-        if($4->size() > 0){
-            for(int i = 0; i < $4->size(); i++){
-                // load args data type
-                temp->load_data((*$4)[i]);
-            }
-        }
-        addSymbol(temp); // add function symbol to table
-        tables.AddTable(); // create a new table for current scope
-    }
-    '{' const_var_dec stmts '}'
-    {
-        // show the Symbols of top table
-        tables.DumpTable();
-        tables.PopTable();
-    };
 %%
 
 int main(int argc, char* argv[])

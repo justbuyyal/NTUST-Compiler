@@ -11,7 +11,6 @@ using namespace std;
 #define MAX_LINE_LENG 256
 #define LIST strcat(buf,yytext)
 #define token(t) {LIST; return(t);}
-#define tokenOP(t) {LIST; return(t);}
 #define tokenDoubleOP(t) {LIST;}
 
 int linenum = 1;
@@ -27,13 +26,14 @@ DELIMITERS [,|:|\.|;|\(|\)|\[|\]|\{|\}|=]
 ARITHMETIC [\+|\-|\*|\/%]
 RELATIONAL [\>|\<]
 LOGICAL !
+CHARACTER \'[a-zA-Z0-9]\'
 
  // Create a state for comment
 %x COMMENT
-%x STRING
+%x STRING_
 
 %%
- /* Double Operator */
+ /* Connectivite Operator */
 "=="            {tokenDoubleOP("=="); return DE;}
 "<="            {tokenDoubleOP("<="); return LE;}
 ">="            {tokenDoubleOP(">="); return BE;}
@@ -47,7 +47,7 @@ LOGICAL !
  /* relational */
 {RELATIONAL} |
  /* logical */
-{LOGICAL}       {tokenOP(*yytext);} // Single operator
+{LOGICAL}       {token(yytext[0]);} // Single operator
  /* keywords */
 boolean         {token(BOOLEAN);}
 break           {token(BREAK);}
@@ -88,28 +88,37 @@ false           {
 }
  /* identifier */
 {IDENTIFIER}    {
+    LIST;
     yylval.strval = new string(yytext);
     return ID;
 }
+ /* character */
+{CHARACTER}          {
+    LIST;
+    yylval.cval = yytext[1];
+    return CHAR_VAL;
+}
  /* integer */
 {NUMBER}        {
+    LIST;
     yylval.ival = atoi(yytext);
     return INT_VAL;
 }
  /* real number */
 {REAL}          {
+    LIST;
     double temp;
-    sscanf(yytext, "%lf", temp);
+    sscanf(yytext, "%lf", &temp);
     yylval.fval = temp;
     return FLOAT_VAL;
 }
  /* string constant */
-\"                          {BEGIN(STRING); LIST;}
-<STRING>\"\"                {LIST; strcat(str_buf, "\"");}
-<STRING>\n                  {LIST; printf("%d:%s\n", linenum, buf); printf("bad character:'\"'\n"); exit(-1);}
-<STRING>[ \t]*              {LIST; strcat(str_buf, yytext);}
-<STRING>[^\"\n]*            {LIST; strcat(str_buf, yytext);}
-<STRING>\"                  {BEGIN(INITIAL); yylval.strval = new string(str_buf); str_buf[0] = '\0'; return STR_VAL;}
+\"                          {BEGIN(STRING_); LIST;}
+<STRING_>\"\"                {LIST; strcat(str_buf, "\"");}
+<STRING_>\n                  {LIST; printf("%d:%s\n", linenum, buf); printf("bad character:'\"'\n"); exit(-1);}
+<STRING_>[ \t]*              {LIST; strcat(str_buf, yytext);}
+<STRING_>[^\"\n]*            {LIST; strcat(str_buf, yytext);}
+<STRING_>\"                  {BEGIN(INITIAL); yylval.strval = new string(str_buf); str_buf[0] = '\0'; return STR_VAL;}
  /* comment */
 "//"            {
     strcat(buf, "//");
@@ -128,7 +137,6 @@ false           {
 <COMMENT>"*/"               {BEGIN(INITIAL); LIST;}
 <COMMENT>"\n"               {LIST; printf("%d: %s", linenum, buf); buf[0] = '\0'; linenum++;}
 <COMMENT>.                  {LIST;}
-<<EOF>>                     {BEGIN(INITIAL); printf("%d: %s\n", linenum, buf); buf[0] = '\0';}
  /* newline */
 \n              {
     LIST;
