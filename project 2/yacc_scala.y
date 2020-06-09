@@ -116,7 +116,17 @@ method:
     DEF ID '(' optional_args ')' return_type
     {
         Trace("In method\n");
-        FuncSymbol* temp = new FuncSymbol($2, $6, FUNCTION);
+        FuncSymbol* temp;
+        if(tables->lookup($2) != NULL)
+        {
+            yyerror("There is a same name method !");
+            string s_temp = "1_" + *$2;
+            temp = new FuncSymbol(&s_temp, $6, FUNCTION);
+        }
+        else
+        {
+            temp = new FuncSymbol($2, $6, FUNCTION);
+        }
         // input data assign to function symbol
         if($4->size() > 0){
             Trace("load args\n");
@@ -340,8 +350,8 @@ simple:
         // assign a new value
         if($3->flag) temp->new_data(*$6, $3->ival);
     }
-    | PRINT '(' expression ')'
-    | PRINTLN '(' expression ')'
+    | PRINT  expression
+    | PRINTLN  expression
     | READ ID
     {
         Symbol* temp = tables->lookup($2);
@@ -361,6 +371,11 @@ simple:
     }
     | RETURN expression
     {
+        int temp = current_method.size();
+        /* check the current method declared before and check return type */
+        if(temp <= 0){
+             yyerror("None functional return !"); /* there is no function */
+        }
         /* expression will lookup by itself, so do nothing */
     };
 expression:
@@ -383,6 +398,10 @@ expression:
         if(temp->get_syn() != ARRAY) Assign_Error(temp->get_name()); // Array
         // return array value[ival]
         if($3->flag) $$ = temp->get_data($3->ival);
+    }
+    | '(' expression ')'
+    {
+        $$ = $2;
     }
     | '-' expression %prec UMINUS
     {
