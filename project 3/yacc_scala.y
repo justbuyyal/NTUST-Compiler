@@ -3,6 +3,10 @@
 #include <fstream>
 #include "lex.yy.cpp"
 #define Trace(t)    if(0) {printf(t);}
+
+fstream fp;
+int local_var_stacks = 0;
+
 Symbol_list* tables = new Symbol_list();
 vector<Symbol*>current_method;
 vector<Symbol*>arg_data;
@@ -44,6 +48,19 @@ void addSymbol(Symbol* s)
 {
     if(tables->insert(s) == -1) yyerror("Symbol already exist !");
     else Trace("Insert Symbol Successful\n");
+}
+void switch_type(variable t)
+{
+    switch(t)
+    {
+        case 0: 
+        case 5:
+            fp << "int "; break;
+        case 1: fp << "float "; break;
+        case 2: fp << "bool "; break;
+        case 3: fp << "char "; break;
+        case 4: fp << "java.lang.String "; break;
+    }
 }
 %}
 %union {
@@ -90,6 +107,9 @@ program:
             temp->set_global();
             addSymbol(temp); // add object symbol to table
             ++object_count;
+            // java code
+            fp << "class " << temp->get_name() << endl;
+            fp << "{" << endl;
         }
         else yyerror("Can only have one object !");
         tables->AddTable(); // create a new table for next scope
@@ -101,6 +121,8 @@ program:
         tables->DumpTable();
         if(!main_method_flag) yyerror("There is no 'main' method !");
         tables->PopTable();
+        // java code
+        fp << "}" << endl;
     };
 dec_and_methods:
     const_dec dec_and_methods
@@ -129,26 +151,57 @@ method:
         {
             temp = new FuncSymbol($2, $6, FUNCTION);
         }
+        current_method.push_back(temp);
+        if(temp->get_name() == "main") { 
+            main_method_flag = true;
+        }
+        // java code
+        local_var_stacks = 0;
+        fp << "method public static ";
+        switch($6) {
+            case 0: fp << "int "; break;
+            case 1: fp << "float "; break;
+            case 2: fp << "bool "; break;
+            case 3: fp << "char "; break;
+            case 4: fp << "java.lang.String "; break;
+            case 5: fp << "void "; break;
+        }
+        fp << temp->get_name() << "(";
+        if(tables->get_size() == 1) temp->set_global();
+
         // input data assign to function symbol
         if($4->size() > 0){
             Trace("load args\n");
             for(int i = 0; i < $4->size(); i++){
                 // load args data type
                 temp->load_data((*$4)[i]);
+                // java code
+                switch_type((*$4)[i]);
+                if(i != $4->size() - 1){ fp << ","; }
             }
         }
-        current_method.push_back(temp);
-        if(temp->get_name() == "main") main_method_flag = true;
-
-        if(tables->get_size() == 1) temp->set_global();
+        else {
+            // java code
+            fp << "java.lang.String[]";
+        }
+        fp << ")" << endl;
         addSymbol(temp); // add function symbol to table
         tables->AddTable(); // create a new table for next scope
 
         /* Insert args to table */
         if(arg_data.size() > 0) {
-            for(int i = 0; i < arg_data.size(); i++) addSymbol(arg_data[i]);
+            for(int i = 0; i < arg_data.size(); i++) {
+                // java code
+                arg_data[i]->local_stack = local_var_stacks;
+                local_var_stacks++;
+                addSymbol(arg_data[i]);
+            }
             arg_data.clear();
         }
+        // java code
+        fp << "max_stack 15" << endl;
+        fp << "max_locals 15" << endl;
+        fp << "{" << endl;
     }
     '{' dec_and_stmts '}'
     {
@@ -156,6 +209,16 @@ method:
         current_method.pop_back();
         tables->DumpTable();
         tables->PopTable();
+        // java code
+        switch($6) {
+            case 0:
+            case 1:
+            case 2:
+            case 3:
+                fp << "ireturn" << endl; break;
+            case 5: fp << "return" << endl; break;
+        }
+        fp << "}" << endl;
     };
 data_type:
     INT
@@ -226,9 +289,11 @@ const_dec:
             if($3 != NONE){
                 if($3 != $5->get_type()) DiffDataType();
             }
-            VarSymbol* temp = new VarSymbol($2, *$5, CONST);
-            if(tables->get_size() == 1) temp->set_global();
-            addSymbol(temp);
+            else {
+                VarSymbol* temp = new VarSymbol($2, *$5, CONST);
+                if(tables->get_size() == 1) temp->set_global();
+                addSymbol(temp);
+            }
         }
     };
 var_dec:
@@ -238,7 +303,25 @@ var_dec:
         if(temp != NULL) yyerror("Symbol already exist !");
         else {
             VarSymbol* temp = new VarSymbol($2, $3, VARIABLE);
-            if(tables->get_size() == 1) temp->set_global();
+            if(tables->get_size() == 1) {
+                temp->set_global();
+                fp << "field static ";
+                switch($3){
+                    case 0:
+                    case 2:
+                    case 5:
+                     fp << "int "; break;
+                    case 1: fp << "float "; break;
+                    case 3: fp << "char "; break;
+                    case 4: fp << "java.lang.String "; break;
+                }
+                fp << temp->get_name() << end;
+            }
+            else {
+                // java code
+                temp->local_stack = local_var_stacks;
+                local_var_stacks++;
+            }
             addSymbol(temp);
         }
     }|
@@ -573,9 +656,11 @@ int main(int argc, char* argv[])
 {
     if(argc != 2) exit(1);
     yyin = fopen(argv[1], "r");
+    fp.open("scala.jasm", ios::out);
     if(yyparse() == 1)
     {
         yyerror("Parsing error !\n"); /* syntax error */
     }
+    fp.close();
 	return 0;
 }
