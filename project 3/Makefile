@@ -2,7 +2,7 @@ all: parser
 
 CC = g++
 LEX_FILENAME = lex_scala.l
-YACC_FILENAME = yacc_scala.y
+YACC_FILENAME = yacc_proj3.y
 TABLE = SymbolTable.h
 
 parser: lex.yy.cc y.tab.cpp SymbolTable.h

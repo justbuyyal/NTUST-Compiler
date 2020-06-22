@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <vector>
 #include <map>
@@ -22,7 +23,6 @@ enum syntactic
 {
     CONST,
     VARIABLE,
-    ARRAY,
     FUNCTION,
     _OBJECT,
     _ERR
@@ -32,7 +32,7 @@ class sValue
 {
 public:
     variable type;
-    bool flag;
+    bool is_const;
     union
     {
         int ival;
@@ -41,15 +41,15 @@ public:
         char cval;
         string* strval;
     };
-    sValue():flag(false), type(ERR){}
-    sValue(variable t):flag(false), type(t){}
+    sValue():type(ERR), is_const(false){}
+    sValue(variable t):type(t), is_const(false){}
     variable get_type(){return type;}
-    void set_type(variable t) {type = t;}
-    void assign_int(int i){ival = i; flag = true;}
-    void assign_float(float f){fval = f; flag = true;}
-    void assign_bool(bool b){bval = b; flag = true;}
-    void assign_char(char c){cval = c; flag = true;}
-    void assign_str(string* s){strval = s; flag = true;}
+    void set_const() {is_const = true;}
+    void assign_int(int i){ival = i; type = iNT;}
+    void assign_float(float f){fval = f; type = fLOAT;}
+    void assign_bool(bool b){bval = b; type = bOOL;}
+    void assign_char(char c){cval = c; type = cHAR;}
+    void assign_str(string* s){strval = s; type = sTRING;}
 };
 
 class Symbol
@@ -57,25 +57,20 @@ class Symbol
 private:
     string id_name;
     syntactic syn_dec;
-    bool is_global;
 public:
-    Symbol(string* id, syntactic syn):id_name(*id), syn_dec(syn), is_global(false){}
+    int local_stack; // java code local variable
+    Symbol(string* id, syntactic syn):id_name(*id), syn_dec(syn){}
     string get_name(){return id_name;}
     syntactic get_syn(){return syn_dec;}
-    void set_global() {is_global = true;}
-    bool global() {return is_global;}
     
-    virtual bool verified(){return false;}
     virtual variable get_type() {return NONE;}
-    virtual void set_data(sValue v){}
     virtual sValue* get_data(){return new sValue();}
-
-    virtual void new_value(sValue* ar){}
-    virtual void new_data(sValue v, int index){}
-    virtual sValue* get_data(int index){return new sValue();}
+    virtual void set_global() {}
+    virtual bool global() {return false;}
 
     virtual bool verified(vector<sValue>* tmp){return false;}
     virtual void load_data(variable d){}
+    virtual void func_arg(fstream &fp) {}
 };
 
 class VarSymbol:public Symbol
@@ -86,38 +81,8 @@ private:
 public:
     VarSymbol(string* id, sValue v, syntactic syn):Symbol(id, syn), variable_value(v), is_global(false){}
     VarSymbol(string* id, variable t, syntactic syn):Symbol(id, syn), variable_value(t), is_global(false){}
-    bool verified(){return variable_value.flag;}
     variable get_type(){return variable_value.get_type();}
-    void set_data(sValue v){variable_value = v;}
     sValue* get_data(){return &variable_value;}
-    void set_global() {is_global = true;}
-    bool global() {return is_global;}
-};
-
-class ArrSymbol:public Symbol
-{
-private:
-    sValue* array_value; // an array of data
-    variable array_type;
-    int arr_size;
-    bool is_global;
-public:
-    ArrSymbol(string* id, variable t, syntactic syn, int len):Symbol(id, syn), array_type(t), arr_size(len), is_global(false){
-        array_value = new sValue[len];
-        for(int i = 0; i < len; i++){
-            array_value[i].set_type(t);
-        }
-    }
-    variable get_type() {return array_type;}
-    sValue* get_data(int index) {
-        if(index < arr_size - 1) return (array_value + index);
-        else cout << "Array access out of range\n";
-    }
-    void new_value(sValue* ar) {array_value = ar;}
-    void new_data(sValue v, int index) {
-        if(index < arr_size - 1) *(array_value + index) = v;
-        else cout << "Array access out of range\n";
-    }
     void set_global() {is_global = true;}
     bool global() {return is_global;}
 };
@@ -125,28 +90,43 @@ public:
 class FuncSymbol:public Symbol
 {
 private:
-    vector<variable>input_data;
     variable return_type;
     int arg_size;
     sValue* return_value;
-    bool is_global;
 public:
-    FuncSymbol(string* id, variable r, syntactic syn):Symbol(id, syn), return_type(r), arg_size(0), is_global(false){}
+    vector<VarSymbol*>input_data;
+    FuncSymbol(string* id, variable r, syntactic syn):Symbol(id, syn), return_type(r), arg_size(0){}
     variable get_type() { return return_type;}
-    void load_data(variable i) {input_data.push_back(i); arg_size++;}
+    void load_data(VarSymbol* i) {input_data.push_back(i); arg_size++;}
     bool verified(vector<sValue>* tmp){
-        if(tmp->size() != arg_size) return false;
-        if(return_type == NONE) return false;
+        if(tmp->size() != arg_size) {
+            cout << "Debug: Function size wrong" << endl;
+            return false;
+        }
         for(int i = 0; i < arg_size; i++){
-            if(input_data[i] != (*tmp)[i].get_type()){
+            if(input_data[i]->get_type() != (*tmp)[i].get_type()){
+                cout << "Debug: Function data type wrong" << endl;
                 return false;
             }
         }
         return true;
     }
-    void set_return_value(sValue* tmp) {return_value = tmp;}
-    void set_global() {is_global = true;}
-    bool global() {return is_global;}
+    void func_arg(fstream &fp) {
+        cout << "Debug : Function arguments" << endl;
+        for(int i = 0; i < arg_size; i++) {
+                switch(input_data[i]->get_type()) {
+                    case 0:
+                    case 2:
+                    case 5:
+                            fp << "int"; break;
+                    case 3: fp << "char"; break;
+                    case 4: fp << "java.lang.String"; break;
+                }
+                if(i != arg_size - 1) {
+                    fp << ", ";
+                }
+        }
+    }
 };
 
 class SymbolTable
@@ -202,7 +182,7 @@ class Symbol_list
         vector<SymbolTable>list;
         int index;
     public:
-        Symbol_list() {index = 0; list.resize(1); cout << "initialized table created" << endl;}
+        Symbol_list() {index = 0; list.resize(1);}
         Symbol* lookup(string* name, int deep) {
             if(deep == 0) deep = index + 1;
             int temp = index;
