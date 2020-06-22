@@ -2,13 +2,14 @@
 #include "SymbolTable.h"
 #include "lex.yy.cpp"
 
-#define Trace(t)    printf(t)
+#define Trace(t)    if(false) {printf(t)}
 
 // Java file and stack
 fstream fp;
 int local_var_stacks = 0;
 int label_stack = 0;
 vector<int>label_list;
+istream::streampos position;
 // -------------------------------------------------------- //
 // yacc initialization
 Symbol_list* tables = new Symbol_list();
@@ -33,7 +34,10 @@ void Wrong_Data_Type() { yyerror("Error data type !"); } // Data type not for cu
 void addSymbol(Symbol* s) {
     // Search current symbol table
     if(tables->insert(s) == -1) yyerror("Symbol already exist in this scope !");
-    else // Trace("Insert Symbol Successful\n");
+    else 
+    {
+        // Trace("Insert Symbol Successful\n");
+    }
 }
 // -------------------------------------------------------- //
 // Java code file input
@@ -89,9 +93,9 @@ void build_variable(VarSymbol* temp, sValue* exp) {
         }
     }
     else { // local variable
-        temp->local_stack = local_var_stacks;
+        temp->set_stack(local_var_stacks);
         if(exp != NULL) {
-            fp << "istore " << temp->local_stack << endl;
+            fp << "istore " << temp->get_stack() << endl;
         }
         ++local_var_stacks;
     }
@@ -200,23 +204,25 @@ method:
         {
             main_method_flag = true;
         }
-        // method stack plus one
-        current_method.push_back(temp);
         // Load function arguments
         for(int i = 0; i < $4->size(); i++)
         {
             temp->load_data((*$4)[i]);
         }
+        // method stack plus one
+        current_method.push_back(temp);
         // Add function symbol to table
         addSymbol(temp);
         tables->AddTable(); // create a new tables for next scope
         // Insert arguments to symbol table
         for(int i = 0; i < $4->size(); i++)
         {
-            addSymbol((*$4)[i]); // Symbol*
+            // Variable Symbol
+            (*$4)[i]->set_stack(local_var_stacks);
+            local_var_stacks++;
+            addSymbol((*$4)[i]);
         }
         // java method code --------------------------------------------------------- //
-        local_var_stacks = 0;
         build_method(temp);
         // -------------------------------------------------------------------------- //
     }
@@ -227,7 +233,9 @@ method:
         tables->DumpTable();
         tables->PopTable();
         // java method code --------------------------------------------------------- //
+        if($6 == NONE) fp << "return" << endl;
         fp << "}" << endl;
+        local_var_stacks = 0;
         // -------------------------------------------------------------------------- //
     };
 data_type:
@@ -293,10 +301,14 @@ optional_type:
         $$ = $2;
     }|
     {
-        $$ = iNT;
+        $$ = NONE;
     };
 const_dec:
-    VAL ID optional_type '=' expression
+    VAL ID optional_type '=' 
+    {
+        position = fp.tellg();
+    }
+    expression
     {
         // const variable initialization
         Symbol* s_temp = tables->lookup($2, 1); // Search for current table
@@ -308,14 +320,17 @@ const_dec:
         {
             if($3 != NONE)
             {
-                if($3 != $5->get_type())
+                if($3 != $6->get_type())
                 {
                     cout << "Debug: Const dec with assign" << endl;
                     DiffDataType();
                 }
             }
-            VarSymbol* temp = new VarSymbol($2, *$5, CONST);
+            VarSymbol* temp = new VarSymbol($2, *$6, CONST);
             addSymbol(temp);
+            // java const dec code ---------------------------------------------------- //
+            fp.seekg(position);
+            // ------------------------------------------------------------------------ //
         }
     };
 var_dec:
@@ -452,9 +467,9 @@ simple:
         }
         else
         {
-            if(s_temp->get_type() != $3->get_type())
+            if(s_temp->get_type() != $3->type)
             {
-                cout << "Function assign" << endl;
+                cout << "Function assign error" << endl;
                 DiffDataType();
             }
             else
@@ -466,6 +481,7 @@ simple:
                 }
                 else
                 {
+                    // java variable assign code -------------------------------------------- //
                     if(s_temp->global())
                     {
                         switch(s_temp->get_type())
@@ -482,8 +498,9 @@ simple:
                     }
                     else // local
                     {
-                        fp << "istore " << s_temp->local_stack << endl;
+                        fp << "istore " << s_temp->get_stack() << endl;
                     }
+                    // ---------------------------------------------------------------------- //
                 }
             }
         }
@@ -495,7 +512,7 @@ simple:
     expression
     {
         fp << "invokevirtual void java.io.PrintStream.print(";
-        switch($3->get_type())
+        switch($3->type)
         {
             case 0:
             case 2:
@@ -513,7 +530,7 @@ simple:
     expression
     {
         fp << "invokevirtual void java.io.PrintStream.println(";
-        switch($3->get_type())
+        switch($3->type)
         {
             case 0:
             case 2:
@@ -531,24 +548,26 @@ simple:
         /* check the current method declared before and check return type */
         if(temp > 0 && current_method[temp - 1]->get_type() == NONE)
         {
-            // Trace("return nothing\n");
+            // java return code --------------------------------------------------------- //
+            fp << "return" << endl;
+            // -------------------------------------------------------------------------- //
         }
         else
         {
             yyerror("None functional return !"); /* there is no function */
         }
-        // java return code --------------------------------------------------------- //
-        fp << "return" << endl;
-        // -------------------------------------------------------------------------- //
     }|
     RETURN expression
     {
         int temp = current_method.size();
         /* check the current method declared before and check return type */
         if(temp <= 0) yyerror("None functional return !"); /* there is no function */
-        // java return code --------------------------------------------------------- //
-        fp << "ireturn" << endl;
-        // -------------------------------------------------------------------------- //
+        else
+        {
+            // java return code --------------------------------------------------------- //
+            fp << "ireturn" << endl;
+            // -------------------------------------------------------------------------- //
+        }
     };
 expression:
     const_val
@@ -560,10 +579,10 @@ expression:
             case 0: fp << "sipush " << $1->ival << endl; break;
             case 2: fp << "iconst_" << (int)($1->bval) << endl; break;
             case 3: break;
-            case 4: fp << "ldc " << *($1->strval) << endl; break;
+            case 4: fp << "ldc \"" << *($1->strval) << "\""<< endl; break;
         }
         // ------------------------------------------------------------------------- //
-    } |
+    }|
     ID
     {
         // table lookup check
@@ -575,6 +594,7 @@ expression:
         }
         else
         {
+            $$ = s_temp->get_data();
             // java id code --------------------------------------------------------- //
             if(s_temp->get_syn() == CONST)
             {
@@ -584,11 +604,11 @@ expression:
                     case 0: fp << "sipush " << temp->ival << endl; break;
                     case 2: fp << "iconst_" << (int)(temp->bval) << endl; break;
                     case 3: break;
-                    case 4: fp << "ldc " << *(temp->strval) << endl; break;
+                    case 4: fp << "ldc \"" << *(temp->strval) << "\"" << endl; break;
                 }
             }
-            else
-            { // Variable
+            else // Variable
+            {
                 if(s_temp->global())
                 {
                     switch(s_temp->get_type())
@@ -604,7 +624,7 @@ expression:
                 }
                 else // Local variable
                 {
-                    fp << "iload " << s_temp->local_stack << endl;
+                    fp << "iload " << s_temp->get_stack() << endl;
                 }
             }
             // ---------------------------------------------------------------------- //
@@ -624,6 +644,9 @@ expression:
         }
         else
         {
+            sValue* temp = new sValue(iNT);
+            temp->assign_int(($2->ival) * -1);
+            $$ = temp;
             // java UMINUS code --------------------------------------------------------- //
             fp << "ineg" << endl;
             // ---------------------------------------------------------------------- //
@@ -646,6 +669,9 @@ expression:
             }
             else
             {
+                sValue* temp = new sValue(iNT);
+                temp->assign_int($1->ival * $3->ival);
+                $$ = temp;
                 // java multiple code --------------------------------------------------------- //
                 fp << "imul" << endl;
                 // ---------------------------------------------------------------------------- //
@@ -669,6 +695,9 @@ expression:
             }
             else
             {
+                sValue* temp = new sValue(iNT);
+                temp->assign_int($1->ival / $3->ival);
+                $$ = temp;
                 // java divide code --------------------------------------------------------- //
                 fp << "idiv" << endl;
                 // ---------------------------------------------------------------------------- //
@@ -678,7 +707,7 @@ expression:
     expression '+' expression
     {
         // available check
-        if($1->type != $3->type)
+        if($1->get_type() != $3->get_type())
         {
             cout << "Exp +\n";
             DiffDataType();
@@ -692,7 +721,10 @@ expression:
             }
             else
             {
-                // java add code --------------------------------------------------------- //
+                sValue* temp = new sValue(iNT);
+                temp->assign_int($1->ival + $3->ival);
+                $$ = temp;
+                // java add code -------------------------------------------------------------- //
                 fp << "iadd" << endl;
                 // ---------------------------------------------------------------------------- //
             }
@@ -715,6 +747,9 @@ expression:
             }
             else
             {
+                sValue* temp = new sValue(iNT);
+                temp->assign_int($1->ival - $3->ival);
+                $$ = temp;
                 // java sub code --------------------------------------------------------- //
                 fp << "isub" << endl;
                 // ---------------------------------------------------------------------------- //
@@ -731,6 +766,15 @@ expression:
         }
         else
         {
+            sValue* temp = new sValue(bOOL);
+            switch($1->type)
+            {
+                case 0: temp->assign_bool($1->ival < $3->ival); break;
+                case 2: temp->assign_bool($1->bval < $3->bval); break;
+                case 3: temp->assign_bool($1->cval < $3->cval); break;
+                case 4: temp->assign_bool($1->strval < $3->strval); break;
+            }
+            $$ = temp;
             // java boolean code --------------------------------------------------------- //
             fp << "isub" << endl << "iflt L" << label_stack << endl;
             int label_temp = label_stack;
@@ -752,6 +796,15 @@ expression:
         }
         else
         {
+            sValue* temp = new sValue(bOOL);
+            switch($1->type)
+            {
+                case 0: temp->assign_bool($1->ival > $3->ival); break;
+                case 2: temp->assign_bool($1->bval > $3->bval); break;
+                case 3: temp->assign_bool($1->cval > $3->cval); break;
+                case 4: temp->assign_bool($1->strval > $3->strval); break;
+            }
+            $$ = temp;
             // java boolean code --------------------------------------------------------- //
             fp << "isub" << endl << "ifgt L" << label_stack << endl;
             int label_temp = label_stack;
@@ -774,6 +827,15 @@ expression:
         }
         else
         {
+            sValue* temp = new sValue(bOOL);
+            switch($1->type)
+            {
+                case 0: temp->assign_bool($1->ival <= $3->ival); break;
+                case 2: temp->assign_bool($1->bval <= $3->bval); break;
+                case 3: temp->assign_bool($1->cval <= $3->cval); break;
+                case 4: temp->assign_bool($1->strval <= $3->strval); break;
+            }
+            $$ = temp;
             // java boolean code --------------------------------------------------------- //
             fp << "isub" << endl << "ifle L" << label_stack << endl;
             int label_temp = label_stack;
@@ -796,6 +858,15 @@ expression:
         }
         else
         {
+            sValue* temp = new sValue(bOOL);
+            switch($1->type)
+            {
+                case 0: temp->assign_bool($1->ival >= $3->ival); break;
+                case 2: temp->assign_bool($1->bval >= $3->bval); break;
+                case 3: temp->assign_bool($1->cval >= $3->cval); break;
+                case 4: temp->assign_bool($1->strval >= $3->strval); break;
+            }
+            $$ = temp;
             // java boolean code --------------------------------------------------------- //
             fp << "isub" << endl << "ifge L" << label_stack << endl;
             int label_temp = label_stack;
@@ -818,6 +889,15 @@ expression:
         }
         else
         {
+            sValue* temp = new sValue(bOOL);
+            switch($1->type)
+            {
+                case 0: temp->assign_bool($1->ival == $3->ival); break;
+                case 2: temp->assign_bool($1->bval == $3->bval); break;
+                case 3: temp->assign_bool($1->cval == $3->cval); break;
+                case 4: temp->assign_bool($1->strval == $3->strval); break;
+            }
+            $$ = temp;
             // java boolean code --------------------------------------------------------- //
             fp << "isub" << endl << "ifeq L" << label_stack << endl;
             int label_temp = label_stack;
@@ -840,6 +920,15 @@ expression:
         }
         else
         {
+            sValue* temp = new sValue(bOOL);
+            switch($1->type)
+            {
+                case 0: temp->assign_bool($1->ival != $3->ival); break;
+                case 2: temp->assign_bool($1->bval != $3->bval); break;
+                case 3: temp->assign_bool($1->cval != $3->cval); break;
+                case 4: temp->assign_bool($1->strval != $3->strval); break;
+            }
+            $$ = temp;
             // java boolean code --------------------------------------------------------- //
             fp << "isub" << endl << "ifne L" << label_stack << endl;
             int label_temp = label_stack;
@@ -861,6 +950,9 @@ expression:
         }
         else
         {
+            sValue* temp = new sValue(bOOL);
+            temp->assign_bool(!($2->bval));
+            $$ = temp;
             // java XOR code --------------------------------------------------------- //
             fp << "iconst_1" << endl << "ixor" << endl;
             // ----------------------------------------------------------------------- //
@@ -884,6 +976,9 @@ expression:
             }
             else
             {
+                sValue* temp = new sValue(bOOL);
+                temp->assign_bool(($1->bval && $3->bval));
+                $$ = temp;
                 // java AND code --------------------------------------------------------- //
                 fp << "iand" << endl;
                 // ----------------------------------------------------------------------- //
@@ -908,6 +1003,9 @@ expression:
             }
             else
             {
+                sValue* temp = new sValue(bOOL);
+                temp->assign_bool(($1->bval || $3->bval));
+                $$ = temp;
                 // java OR code --------------------------------------------------------- //
                 fp << "ior" << endl;
                 // ----------------------------------------------------------------------- //
@@ -935,30 +1033,33 @@ func_invocation:
             // Function Error
             Assign_Error(s_temp->get_name());
         }
-        if(!(s_temp->verified($3)))
-        {
-            // Function input data inconsistance
-            yyerror("Func_invocation: Function input data correspondence error !");
-        }
         else
         {
-            // return function return_type
-            $$ = s_temp->get_type();
-            // java func_invocation code --------------------------------------------------------- //
-            fp << "invokestatic ";
-            switch(s_temp->get_type())
+            if(!(s_temp->verified($3)))
             {
-                case 0:
-                case 2:
-                case 5:
-                        fp << "int "; break;
-                case 3: break;
-                case 4: fp << "java.lang.String "; break;
+                // Function input data inconsistance
+                yyerror("Func_invocation: Function input data correspondence error !");
             }
-            fp << Class_name << "." << s_temp->get_name() << "(";
-            s_temp->func_arg(fp);
-            fp << ")" << endl;
-            // ----------------------------------------------------------------------------------- //
+            else
+            {
+                // return function return_type
+                $$ = s_temp->get_type();
+                // java func_invocation code --------------------------------------------------------- //
+                fp << "invokestatic ";
+                switch(s_temp->get_type())
+                {
+                    case 0:
+                    case 2:
+                    case 5:
+                            fp << "int "; break;
+                    case 3: break;
+                    case 4: fp << "java.lang.String "; break;
+                }
+                fp << Class_name << "." << s_temp->get_name() << "(";
+                s_temp->func_arg(fp);
+                fp << ")" << endl;
+                // ----------------------------------------------------------------------------------- //
+            }
         }
     };
 block:
@@ -981,12 +1082,13 @@ conditional:
         // Only boolean can be compared
         if($3->type != bOOL)
         {
+            cout << $3->type << endl;
             Wrong_Data_Type();
         }
         else
         {
             // java IF code --------------------------------------------------------- //
-            fp << "iconst_0" << endl << "ifeq L" << label_stack << endl;
+            fp << "ifeq L" << label_stack << endl;
             label_list.push_back(label_stack);
             ++label_stack;
             // ---------------------------------------------------------------------- //
@@ -1109,11 +1211,11 @@ loop:
                         }
                         else
                         { // Local variable
-                            fp << "istore " << s_temp->local_stack << endl;
+                            fp << "istore " << s_temp->get_stack() << endl;
                             fp << "L" << label_stack << ":" << endl;
                             label_list.push_back(label_stack);
                             ++label_stack;
-                            fp << "iload " << s_temp->local_stack << endl;
+                            fp << "iload " << s_temp->get_stack() << endl;
                         }
                         fp << "sipush " << $8 << endl;
                         fp << "isub" << endl << "ifle L" << label_stack << endl; // True statement
@@ -1134,9 +1236,9 @@ loop:
                         else
                         { // Local variable
                             fp << "sipush 1" << endl;
-                            fp << "iload " << s_temp->local_stack << endl;
+                            fp << "iload " << s_temp->get_stack() << endl;
                             fp << "iadd" << endl;
-                            fp << "istore " << s_temp->local_stack << endl;
+                            fp << "istore " << s_temp->get_stack() << endl;
                         }
                         fp << "iconst_1" << endl;
                         fp << "L" << label_list.back() << ":" << endl;
@@ -1162,11 +1264,47 @@ int main(int argc, char* argv[])
 {
     if(argc != 2) exit(1);
     yyin = fopen(argv[1], "r");
-    fp.open("scala.jasm", ios::out);
+    fp.open("scala.txt", ios::out);
     if(yyparse() == 1)
     {
         yyerror("Parsing Error !\n"); /* syntax error */
     }
     fp.close();
+    fstream output;
+    output.open("scala.jasm", ios::out);
+    fp.open("scala.txt", ios::in);
+    string line;
+    int tab_stack = 0;
+    while(getline(fp, line))
+    {
+        if(line == "{")
+        {
+            for(int i = 0; i < tab_stack; i++)
+            {
+                output << "\t";
+            }
+            output << "{" << endl;
+            tab_stack++;
+        }
+        else if(line == "}")
+        {
+            --tab_stack;
+            for(int i = 0; i < tab_stack; i++)
+            {
+                output << "\t";
+            }
+            output << "}" << endl;
+        }
+        else
+        {
+            for(int i = 0; i < tab_stack; i++)
+            {
+                output << "\t";
+            }
+            output << line << endl;
+        }
+    }
+    fp.close();
+    output.close();
     return 0;
 }

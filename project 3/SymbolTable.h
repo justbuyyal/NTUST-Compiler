@@ -23,6 +23,7 @@ enum syntactic
 {
     CONST,
     VARIABLE,
+    ARRAY,
     FUNCTION,
     _OBJECT,
     _ERR
@@ -67,6 +68,8 @@ public:
     virtual sValue* get_data(){return new sValue();}
     virtual void set_global() {}
     virtual bool global() {return false;}
+    virtual void set_stack(int s) {}
+    virtual int get_stack() {return 0;}
 
     virtual bool verified(vector<sValue>* tmp){return false;}
     virtual void load_data(variable d){}
@@ -78,6 +81,7 @@ class VarSymbol:public Symbol
 private:
     sValue variable_value;
     bool is_global;
+    int local_stack;
 public:
     VarSymbol(string* id, sValue v, syntactic syn):Symbol(id, syn), variable_value(v), is_global(false){}
     VarSymbol(string* id, variable t, syntactic syn):Symbol(id, syn), variable_value(t), is_global(false){}
@@ -85,6 +89,8 @@ public:
     sValue* get_data(){return &variable_value;}
     void set_global() {is_global = true;}
     bool global() {return is_global;}
+    void set_stack(int s) {local_stack = s;}
+    int get_stack() {return local_stack;}
 };
 
 class FuncSymbol:public Symbol
@@ -95,7 +101,7 @@ private:
     sValue* return_value;
 public:
     vector<VarSymbol*>input_data;
-    FuncSymbol(string* id, variable r, syntactic syn):Symbol(id, syn), return_type(r), arg_size(0){}
+    FuncSymbol(string* id, variable r, syntactic syn):Symbol(id, syn), return_type(r), arg_size(0){input_data.clear();}
     variable get_type() { return return_type;}
     void load_data(VarSymbol* i) {input_data.push_back(i); arg_size++;}
     bool verified(vector<sValue>* tmp){
@@ -112,7 +118,7 @@ public:
         return true;
     }
     void func_arg(fstream &fp) {
-        cout << "Debug : Function arguments" << endl;
+        // cout << "Debug : Function arguments" << endl;
         for(int i = 0; i < arg_size; i++) {
                 switch(input_data[i]->get_type()) {
                     case 0:
