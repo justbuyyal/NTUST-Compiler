@@ -1295,24 +1295,6 @@ loop:
                         fp << "ifeq L" << label_stack << endl; // Exit statement
                         label_list[list_deep].push_back(label_stack);
                         ++label_stack;
-                        // id ++
-                        if(s_temp->global())
-                        {
-                            fp << "getstatic int " << Class_name << "." << s_temp->get_name() << endl;
-                        }
-                        else
-                        {
-                            fp << "iload " << s_temp->get_stack() << endl;
-                        }
-                        fp << "sipush 1" << endl << "iadd" << endl;
-                        if(s_temp->global())
-                        {
-                            fp << "putstatic int " << Class_name << "." << s_temp->get_name() << endl;
-                        }
-                        else
-                        {
-                            fp << "istore " << s_temp->get_stack() << endl;
-                        }
                         ++list_deep;
                         label_list.push_back(vector<int>());
                         // ----------------------------------------------------------------------- //
@@ -1326,6 +1308,25 @@ loop:
         // java For code --------------------------------------------------------- //
         label_list.pop_back();
         --list_deep;
+        // id ++
+        Symbol* s_temp = tables->lookup($3, 0);
+        if(s_temp->global())
+        {
+            fp << "getstatic int " << Class_name << "." << s_temp->get_name() << endl;
+        }
+        else
+        {
+            fp << "iload " << s_temp->get_stack() << endl;
+        }
+        fp << "sipush 1" << endl << "iadd" << endl;
+        if(s_temp->global())
+        {
+            fp << "putstatic int " << Class_name << "." << s_temp->get_name() << endl;
+        }
+        else
+        {
+            fp << "istore " << s_temp->get_stack() << endl;
+        }
         fp << "goto L" << label_list[list_deep][0] << endl;
         fp << "L" << label_list[list_deep].back() << ":" << endl;
         if(list_deep == 0) label_list[list_deep].clear();
