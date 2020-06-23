@@ -23,7 +23,7 @@ NUMBER {DIGIT}+
 IDENTIFIER [a-zA-Z][a-zA-Z0-9]*
 REAL [+-]?{NUMBER}"."{NUMBER}([Ee][+-]?{NUMBER})?
 DELIMITERS [,|:|\.|;|\(|\)|\[|\]|\{|\}|=]
-ARITHMETIC [\+|\-|\*|\/%]
+ARITHMETIC [\+|\-|\*|\/|%]
 RELATIONAL [\>|\<]
 LOGICAL !
 CHARACTER \'[a-zA-Z0-9]\'

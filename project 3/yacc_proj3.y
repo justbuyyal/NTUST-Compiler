@@ -8,7 +8,8 @@
 fstream fp;
 int local_var_stacks = 0;
 int label_stack = 0;
-vector<int>label_list;
+int list_deep = 0;
+vector<vector<int>>label_list;
 istream::streampos position;
 // -------------------------------------------------------- //
 // yacc initialization
@@ -149,6 +150,7 @@ program:
             addSymbol(temp);
             Class_name = temp->get_name(); // Set object name as class name
             // java object code --------------------------------------------------------- //
+            label_list.push_back(vector<int>());
             build_object(temp);
             // -------------------------------------------------------------------------- //
         }
@@ -704,6 +706,32 @@ expression:
             }
         }
     }|
+    expression '%' expression
+    {
+        // available check
+        if($1->type != $3->type)
+        {
+            cout << "Exp %\n";
+            DiffDataType();
+        }
+        else
+        {
+            variable v_temp = $1->type;
+            if(v_temp != iNT)
+            {
+                Wrong_Data_Type();
+            }
+            else
+            {
+                sValue* temp = new sValue(iNT);
+                temp->assign_int($1->ival % $3->ival);
+                $$ = temp;
+                // java reminder code --------------------------------------------------------- //
+                fp << "irem" << endl;
+                // ---------------------------------------------------------------------------- //
+            }
+        }
+    }|
     expression '+' expression
     {
         // available check
@@ -1089,38 +1117,48 @@ conditional:
         {
             // java IF code --------------------------------------------------------- //
             fp << "ifeq L" << label_stack << endl;
-            label_list.push_back(label_stack);
+            label_list[list_deep].push_back(label_stack); // False
             ++label_stack;
+            ++list_deep;
+            label_list.push_back(vector<int>());
             // ---------------------------------------------------------------------- //
         }
     }
     block_or_simple
     {
         // java IF code --------------------------------------------------------- //
-        fp << "goto L" << label_stack << endl;
-        label_list.push_back(label_stack);
+        label_list.pop_back();
+        --list_deep;
+        fp << "goto L" << label_stack << endl; // Exit
+        label_list[list_deep].push_back(label_stack);
         ++label_stack;
         // ---------------------------------------------------------------------- //
     }
     else_stmt
     {
         // java IF code --------------------------------------------------------- //
-        fp << "L" << label_list.back() << ":" << endl;
-        label_list.clear();
+        fp << "L" << label_list[list_deep].back() << ":" << endl; // Exit statement
+        if(list_deep == 0) label_list[list_deep].clear();
         // ---------------------------------------------------------------------- //
     };
 else_stmt:
     ELSE
     {
         // java ELSE code --------------------------------------------------------- //
-        fp << "L" << label_list[0] << ":" << endl;
+        fp << "L" << label_list[list_deep][0] << ":" << endl;
+        ++list_deep;
+        label_list.push_back(vector<int>());
         // ------------------------------------------------------------------------ //
     }
     block_or_simple
+    {
+        label_list.pop_back();
+        --list_deep;
+    }
     | /* zero */
     {
         // java ELSE code --------------------------------------------------------- //
-        fp << "L" << label_list[0] << ":" << endl;
+        fp << "L" << label_list[list_deep][0] << ":" << endl;
         // ------------------------------------------------------------------------ //
     };
 loop:
@@ -1128,7 +1166,7 @@ loop:
     {
         // java While code --------------------------------------------------------- //
         fp << "L" << label_stack << ":" << endl;
-        label_list.push_back(label_stack); // LBegin
+        label_list[list_deep].push_back(label_stack); // LBegin
         ++label_stack;
         // ------------------------------------------------------------------------- //
     }
@@ -1143,31 +1181,33 @@ loop:
         {
             // java While code --------------------------------------------------------- //
             fp << "ifle L" << label_stack << endl;
-            label_list.push_back(label_stack); // LTrue
+            label_list[list_deep].push_back(label_stack); // LTrue
             ++label_stack;
             fp << "iconst_0" << endl;
             fp << "goto L" << label_stack << endl;
-            label_list.push_back(label_stack); // LFalse
+            label_list[list_deep].push_back(label_stack); // LFalse
             ++label_stack;
-            fp << "L" << label_list[1] << ":" << endl << "iconst_1" << endl;
-            fp << "L" << label_list.back() << ":" << endl;
-            label_list.pop_back();
-            label_list.pop_back();
+            fp << "L" << label_list[list_deep][1] << ":" << endl << "iconst_1" << endl;
+            fp << "L" << label_list[list_deep].back() << ":" << endl;
             fp << "ifeq L" << label_stack << endl;
-            label_list.push_back(label_stack); // LExit
+            label_list[list_deep].push_back(label_stack); // LExit
             ++label_stack;
+            ++list_deep;
+            label_list.push_back(vector<int>());
             // ------------------------------------------------------------------------- //
         }
     }
     block_or_simple
     {
         // java While code --------------------------------------------------------- //
-        fp << "goto L" << label_list[0] << endl;
-        fp << "L" << label_list.back() << ":" << endl;
-        label_list.clear();
+        label_list.pop_back();
+        --list_deep;
+        fp << "goto L" << label_list[list_deep][0] << endl;
+        fp << "L" << label_list[list_deep].back() << ":" << endl; // LExit:
+        if(list_deep == 0) label_list[list_deep].clear();
         // ------------------------------------------------------------------------- //
     }
-    | FOR '(' ID '<' '-' INT_VAL TO INT_VAL ')'
+    | FOR '(' ID '<' '-' expression
     {
         // table lookup
         Symbol* s_temp = tables->lookup($3, 0);
@@ -1192,59 +1232,89 @@ loop:
                 }
                 else
                 {
-                    if($6 > $8)
-                    {
-                        // Left should be smaller than right
-                        Assign_Error(s_temp->get_name());
-                    }
-                    else
+                    if($6->type == iNT)
                     {
                         // java For code --------------------------------------------------------- //
-                        fp << "sipush " << $6 << endl;
-                        if(s_temp->global())
+                        if(s_temp->global()) // Assign first variable to identifier
                         {
                             fp << "putstatic int " << Class_name << "." << s_temp->get_name() << endl;
-                            fp << "L" << label_stack << ":" << endl;
-                            label_list.push_back(label_stack);
-                            ++label_stack;
+                            fp << "L" << label_stack << ":" << endl; // Begin statement
                             fp << "getstatic int " << Class_name << "." << s_temp->get_name() << endl;
                         }
                         else
                         { // Local variable
                             fp << "istore " << s_temp->get_stack() << endl;
-                            fp << "L" << label_stack << ":" << endl;
-                            label_list.push_back(label_stack);
-                            ++label_stack;
+                            fp << "L" << label_stack << ":" << endl; // Begin statement
                             fp << "iload " << s_temp->get_stack() << endl;
                         }
-                        fp << "sipush " << $8 << endl;
+                        label_list[list_deep].push_back(label_stack);
+                        ++label_stack;
+                        // ----------------------------------------------------------------------- //
+                    }
+                }
+            }
+        }
+    } 
+    TO expression ')'
+    {
+        Symbol* s_temp = tables->lookup($3, 0);
+        if(s_temp == NULL)
+        {
+            // No declaration before
+            Symbol_Not_Found();
+        }
+        else
+        {
+            if(s_temp->get_syn() != VARIABLE)
+            {
+                // For Variable Error
+                Assign_Error(s_temp->get_name());
+            }
+            else
+            {
+                if(s_temp->get_type() != iNT)
+                {
+                    // For argument INT Error
+                    Assign_Error(s_temp->get_name());
+                }
+                else
+                {
+                    if($9->type == iNT)
+                    {
+                        // java For code --------------------------------------------------------- //
                         fp << "isub" << endl << "ifle L" << label_stack << endl; // True statement
-                        label_list.push_back(label_stack);
+                        label_list[list_deep].push_back(label_stack);
                         ++label_stack;
                         fp << "iconst_0" << endl;
                         fp << "goto L" << label_stack << endl; // False statement
-                        label_list.push_back(label_stack);
+                        label_list[list_deep].push_back(label_stack);
                         ++label_stack;
-                        fp << "L" << label_list[1] << ":" << endl;
+                        fp << "L" << label_list[list_deep][1] << ":" << endl; // True statement
+                        fp << "iconst_1" << endl;
+                        fp << "L" << label_list[list_deep].back() << ":" << endl;
+                        fp << "ifeq L" << label_stack << endl; // Exit statement
+                        label_list[list_deep].push_back(label_stack);
+                        ++label_stack;
+                        // id ++
                         if(s_temp->global())
                         {
                             fp << "getstatic int " << Class_name << "." << s_temp->get_name() << endl;
-                            fp << "sipush 1" << endl;
-                            fp << "iadd" << endl;
+                        }
+                        else
+                        {
+                            fp << "iload " << s_temp->get_stack() << endl;
+                        }
+                        fp << "sipush 1" << endl << "iadd" << endl;
+                        if(s_temp->global())
+                        {
                             fp << "putstatic int " << Class_name << "." << s_temp->get_name() << endl;
                         }
                         else
-                        { // Local variable
-                            fp << "sipush 1" << endl;
-                            fp << "iload " << s_temp->get_stack() << endl;
-                            fp << "iadd" << endl;
+                        {
                             fp << "istore " << s_temp->get_stack() << endl;
                         }
-                        fp << "iconst_1" << endl;
-                        fp << "L" << label_list.back() << ":" << endl;
-                        fp << "ifeq L" << label_stack << endl; // Exit statement
-                        label_list.push_back(label_stack);
-                        ++label_stack;
+                        ++list_deep;
+                        label_list.push_back(vector<int>());
                         // ----------------------------------------------------------------------- //
                     }
                 }
@@ -1254,9 +1324,11 @@ loop:
     block_or_simple
     {
         // java For code --------------------------------------------------------- //
-        fp << "goto L" << label_list[0] << endl;
-        fp << "L" << label_list.back() << endl;
-        label_list.clear();
+        label_list.pop_back();
+        --list_deep;
+        fp << "goto L" << label_list[list_deep][0] << endl;
+        fp << "L" << label_list[list_deep].back() << ":" << endl;
+        if(list_deep == 0) label_list[list_deep].clear();
         // ----------------------------------------------------------------------- //
     };
 %%

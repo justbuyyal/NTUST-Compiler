@@ -19,3 +19,4 @@ clean:
 run:
 	./parser example.scala
 	rm scala.txt
+	./javaa/javaa scala.jasm
