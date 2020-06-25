@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <iomanip>
 #include <string>
 #include <vector>
 #include <map>
@@ -157,18 +158,24 @@ public:
         for(auto iter : table)
         {
             string dump_type, dump_syn;
+            variable v_dump;
+            syntactic s_dump;
+            v_dump = iter.second->get_type();
+            s_dump = iter.second->get_syn();
             // cout << iter.first << " : " << iter.second->get_type() << endl;
-            switch (iter.second->get_type())
+            switch (v_dump)
             {
                 case 0: dump_type = "int";break;
                 case 1: dump_type = "float";break;
                 case 2: dump_type = "bool";break;
                 case 3: dump_type = "char";break;
                 case 4: dump_type = "string";break;
-                case 5: dump_type = "NONE";break;
+                case 5: if(s_dump == 3) dump_type = "void";
+                        else dump_type = "int";
+                        break;
                 default: dump_type = "NONE"; break;
             }
-            switch (iter.second->get_syn())
+            switch (s_dump)
             {
                 case 0: dump_syn = "const";break;
                 case 1: dump_syn = "variable";break;
@@ -177,7 +184,7 @@ public:
                 case 4: dump_syn = "object";break;
                 case 5: dump_syn = "ERROR";break;
             }
-            cout << "Name: " << iter.second->get_name() << "\tType: " << dump_type << "\tSyn: " << dump_syn << endl;
+            cout << "Name: " << setw(5) << iter.second->get_name() << " | Type: " << setw(5) << dump_type << " | Syn: " << dump_syn << endl;
         }
     }
 };
@@ -206,7 +213,7 @@ class Symbol_list
         void AddTable() {cout << "create new table" << endl; list.push_back(SymbolTable()); index++;}
         void PopTable() {cout << "pop table\n" << endl; list.pop_back(); index--;}
         void DumpTable() {
-                cout << "table " << index << " dump: \n------------------------------------\n"; list[index].dump();
-                cout << "------------------------------------\n";
+                cout << "table " << index << " dump: \n-----------------------------------------------\n"; list[index].dump();
+                cout << "-----------------------------------------------\n";
         }
 };
