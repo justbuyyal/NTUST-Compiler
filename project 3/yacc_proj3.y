@@ -297,6 +297,16 @@ const_val:
     STR_VAL
     {
         sValue* temp = new sValue(sTRING);
+        string s_t;
+        for(int i = 0; i < $1->size(); i++)
+        {
+            if((*$1)[i] == '\"')
+            {
+                s_t += "\\";
+            }
+            s_t += (*$1)[i];
+        }
+        *$1 = s_t;
         temp->assign_str($1);
         temp->set_const();
         $$ = temp;
