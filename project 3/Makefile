@@ -13,10 +13,12 @@ lex.yy.cc:
 y.tab.cpp:
 	yacc $(YACC_FILE) -d -o y.tab.cpp
 
-.PHONY: clean run
+.PHONY: clean run del
 clean:
 	rm -f *.cc parser *.hpp *.cpp *.txt
 run:
 	./parser example.scala
 	rm scala.txt
 	./javaa/javaa scala.jasm
+del:
+	rm -f *.txt *.class *.jasm *.cc *.cpp *.hpp

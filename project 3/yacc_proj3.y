@@ -76,21 +76,25 @@ void build_variable(VarSymbol* temp, sValue* exp) {
             case 4: fp << "java.lang.String "; break;
             case 1: break;
         }
-        fp << temp->get_name() << endl;
+        fp << temp->get_name();
         if(exp != NULL) {
             switch(exp->get_type()) {
                 case 0:
                 case 2:
                 case 5:
-                        fp << "putstatic int " << Class_name << "." << temp->get_name() << endl;
+                        fp << " = " << exp->ival << endl;
                         break;
                 case 3:
-                        // char
+                        fp << " = " << exp->cval << endl;
                         break;
                 case 4:
-                        fp << "putstatic java.lang.String " << Class_name << "." << temp->get_name() << endl;
+                        // string
                         break;
             }
+        }
+        else
+        {
+            fp << endl;
         }
     }
     else { // local variable
@@ -358,7 +362,11 @@ var_dec:
             // ---------------------------------------------------------------------------- //
         }
     }|
-    VAR ID optional_type '=' expression
+    VAR ID optional_type '='
+    {
+        position = fp.tellg();
+    }
+    expression
     {
         // Variable initialization
         Symbol* s_temp = tables->lookup($2, 1);
@@ -370,13 +378,13 @@ var_dec:
         {
             if($3 != NONE)
             {
-                if($3 != $5->type)
+                if($3 != $6->type)
                 {
                     cout << "Variable dec with assign" << endl;
                     DiffDataType();
                 }
             }
-            VarSymbol* temp = new VarSymbol($2, *$5, VARIABLE);
+            VarSymbol* temp = new VarSymbol($2, *$6, VARIABLE);
             // Check global
             if(tables->get_size() == 1)
             {
@@ -384,7 +392,8 @@ var_dec:
             }
             addSymbol(temp);
             // java variable code --------------------------------------------------------- //
-            build_variable(temp, $5);
+            fp.seekg(position);
+            build_variable(temp, $6);
             // ---------------------------------------------------------------------------- //
         }
     };
@@ -1180,15 +1189,6 @@ loop:
         else
         {
             // java While code --------------------------------------------------------- //
-            fp << "ifle L" << label_stack << endl;
-            label_list[list_deep].push_back(label_stack); // LTrue
-            ++label_stack;
-            fp << "iconst_0" << endl;
-            fp << "goto L" << label_stack << endl;
-            label_list[list_deep].push_back(label_stack); // LFalse
-            ++label_stack;
-            fp << "L" << label_list[list_deep][1] << ":" << endl << "iconst_1" << endl;
-            fp << "L" << label_list[list_deep].back() << ":" << endl;
             fp << "ifeq L" << label_stack << endl;
             label_list[list_deep].push_back(label_stack); // LExit
             ++label_stack;
